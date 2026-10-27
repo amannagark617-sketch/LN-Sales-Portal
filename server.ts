@@ -1,0 +1,1169 @@
+import express from "express";
+import path from "path";
+import { createServer as createViteServer } from "vite";
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+let salespersonsCache: CacheEntry<any[]> | null = null;
+let targetsCache: CacheEntry<any[]> | null = null;
+let validationCache: CacheEntry<any> | null = null;
+let opfDataCache: CacheEntry<any[]> | null = null;
+let codeMapCache: CacheEntry<Record<string, string>> | null = null;
+let quotationOptionsCache: CacheEntry<any[]> | null = null;
+let quotationHistoryCache: CacheEntry<any[]> | null = null;
+let bankDetailsCache: CacheEntry<any[]> | null = null;
+
+const CACHE_TTL = 4000; // 4 seconds for fast real-time sequence synchronization
+
+const BASE_URL = 'https://docs.google.com/spreadsheets/d/1-K_S1HXjca8dy0Sbl2qN7ts_e_YnKg5fBVSmaHB8kgU/export?format=csv&gid=';
+
+function cleanStr(val: string | undefined): string {
+  if (!val) return '';
+  return val.replace(/[\r\n]/g, '').replace(/^"|"$/g, '').trim();
+}
+
+function cleanNum(val: string | undefined): number {
+  if (!val) return 0;
+  const cleaned = val.replace(/[\r\n"',]/g, '').trim();
+  return Number(cleaned) || 0;
+}
+
+function normalizeShowroomName(name: string | undefined): string {
+  if (!name) return '';
+  return name
+    .replace(/[\r\n\t"]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function isRoomMatch(room1: string | undefined, room2: string | undefined): boolean {
+  const r1 = normalizeShowroomName(room1);
+  const r2 = normalizeShowroomName(room2);
+  if (!r1 || !r2) return false;
+  if (r1 === r2) return true;
+  const stripped1 = r1.replace(/\bshowroom\b/g, '').trim();
+  const stripped2 = r2.replace(/\bshowroom\b/g, '').trim();
+  return stripped1 === stripped2;
+}
+
+function isRowInManagerRooms(rowRoom: string | undefined, managerRooms: Set<string>): boolean {
+  if (!rowRoom) return false;
+  for (const mRoom of managerRooms) {
+    if (isRoomMatch(rowRoom, mRoom)) return true;
+  }
+  return false;
+}
+
+async function getSalespersons(): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}501620290`);
+  const csvText = await response.text();
+  const lines = csvText.split(/\r?\n/);
+  return lines.slice(1).filter(line => line.trim() !== '').map(line => {
+    const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+    const col5 = cleanStr(values[5]);
+    const col6 = cleanStr(values[6]);
+    return {
+      region: cleanStr(values[0]),
+      showroom: cleanStr(values[1]),
+      name: cleanStr(values[2]),
+      id: cleanStr(values[3]),
+      password: cleanStr(values[4]),
+      code: col5,
+      manager: col5,
+      isManager: col5.toLowerCase() === 'manager',
+      managerAccess: col6,
+    };
+  });
+}
+
+async function getTargets(): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}1850303239`); 
+  const csvText = await response.text();
+  const lines = csvText.split(/\r?\n/);
+  const results: any[] = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    let values: string[] = [];
+    if (line.includes('\t')) {
+      values = line.split('\t');
+    } else {
+      values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+    }
+    
+    const clean = (v: string | undefined) => v ? v.replace(/^["']|["']$/g, '').trim() : '';
+    
+    const salesperson = clean(values[0]);
+    const rawDate = clean(values[1]);
+    const rawTarget = clean(values[2]);
+    
+    if (!salesperson || !rawDate) continue;
+
+    let normalizedMonthYear = rawDate;
+    const parts = rawDate.split(/[/-]/);
+    
+    if (parts.length === 3) {
+        if (parts[2].length === 4) {
+            normalizedMonthYear = `${parts[1].padStart(2, '0')}-${parts[2]}`;
+        } else if (parts[0].length === 4) {
+            normalizedMonthYear = `${parts[1].padStart(2, '0')}-${parts[0]}`;
+        }
+    } else if (parts.length === 2) {
+        if (parts[1].length === 4) {
+            normalizedMonthYear = `${parts[0].padStart(2, '0')}-${parts[1]}`;
+        } else if (parts[0].length === 4) {
+            normalizedMonthYear = `${parts[1].padStart(2, '0')}-${parts[0]}`;
+        }
+    }
+
+    const targetValue = Number(rawTarget.replace(/["',]/g, '')) || 0;
+    
+    results.push({
+      salesperson,
+      monthYear: normalizedMonthYear,
+      target: targetValue
+    });
+  }
+  return results;
+}
+
+async function getValidationData(): Promise<any> {
+  const response = await fetch(`${BASE_URL}1117643655`);
+  const csvText = await response.text();
+  const lines = csvText.split('\n');
+  const data: any = {
+    segments: [],
+    leadSources: [],
+    subSegments: [],
+    brands: [],
+    models: [],
+    functionalities: [],
+    categories: [],
+    crrNbds: [],
+    typesOfBusiness: []
+  };
+  
+  lines.slice(1).filter(line => line.trim() !== '').forEach(line => {
+    const values = line.split(',');
+    const trimValue = (v: string | undefined) => v?.trim();
+    
+    if (trimValue(values[0])) data.segments.push(trimValue(values[0])!);
+    if (trimValue(values[1])) data.leadSources.push(trimValue(values[1])!);
+    if (trimValue(values[2])) data.subSegments.push(trimValue(values[2])!);
+    if (trimValue(values[3])) data.brands.push(trimValue(values[3])!);
+    if (trimValue(values[4])) data.models.push(trimValue(values[4])!);
+    if (trimValue(values[5])) data.functionalities.push(trimValue(values[5])!);
+    if (trimValue(values[6])) data.categories.push(trimValue(values[6])!);
+    if (trimValue(values[7])) data.crrNbds.push(trimValue(values[7])!);
+    if (trimValue(values[8])) data.typesOfBusiness.push(trimValue(values[8])!);
+  });
+  return data;
+}
+
+async function getUniqueOPFCodeMap(): Promise<Record<string, string>> {
+  const response = await fetch(`${BASE_URL}1178123264`);
+  const csvText = await response.text();
+  const lines = csvText.split('\n');
+  const codeMap: Record<string, string> = {};
+  lines.slice(1).filter(line => line.trim() !== '').forEach(line => {
+    const values = line.split(',');
+    const visitTypeStr = values[0]?.trim().toLowerCase();
+    const salespersonName = values[1]?.trim().toLowerCase();
+    const opfCode = values[2]?.trim();
+    
+    if (salespersonName && visitTypeStr && opfCode) {
+        const key = `${visitTypeStr}-${salespersonName}`;
+        codeMap[key] = opfCode;
+    }
+  });
+  return codeMap;
+}
+
+async function getOPFData(): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}991175139`);
+  const csvText = await response.text();
+  const lines = csvText.split(/\r?\n/);
+  return lines.slice(1).filter(line => line.trim() !== '').map(line => {
+    const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+    
+    return {
+      date: cleanStr(values[0]),
+      salesperson: cleanStr(values[1]),
+      opf: cleanStr(values[2]),
+      region: cleanStr(values[3]),
+      visitType: cleanStr(values[4]),
+      segment: cleanStr(values[5]),
+      subSegment: cleanStr(values[6]),
+      leadSource: cleanStr(values[7]),
+      clientName: cleanStr(values[8]),
+      companyName: cleanStr(values[9]),
+      mobileNumber: cleanStr(values[10]),
+      emailId: cleanStr(values[11]),
+      dealerName: cleanStr(values[12]),
+      dealerMobileNumber: cleanStr(values[13]),
+      dealerCompanyName: cleanStr(values[14]),
+      dealerCity: cleanStr(values[15]),
+      dealerState: cleanStr(values[16]),
+      city: cleanStr(values[17]),
+      state: cleanStr(values[18]),
+      brandName: cleanStr(values[19]),
+      model: cleanStr(values[20]),
+      functionality: cleanStr(values[21]),
+      category: cleanStr(values[22]),
+      crrNbd: cleanStr(values[23]),
+      typeOfBusiness: cleanStr(values[24]),
+      quantity: cleanNum(values[25]),
+      grossSales: cleanNum(values[26]),
+      commission: cleanNum(values[27]),
+      tax: cleanNum(values[28]),
+      freightCharges: cleanNum(values[29]),
+      netSales: cleanNum(values[30]),
+      advanceAmount: cleanNum(values[31]),
+      remarks: cleanStr(values[32]),
+      clientVisits: cleanNum(values[33]),
+      followUps: cleanNum(values[34]),
+      showroom: cleanStr(values[36]) || cleanStr(values[3]),
+    };
+  });
+}
+
+function parseSafeDate(dStr: string | undefined): Date | null {
+  if (!dStr) return null;
+  const months: Record<string, number> = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+  const parts = dStr.split(/[\s,]+/)[0].split(/[-/]/);
+  if (parts.length === 3) {
+    const p0 = parts[0];
+    const p1 = parts[1];
+    const p2 = parts[2];
+    if (isNaN(Number(p1)) && months[p1.toLowerCase().slice(0,3)] !== undefined) {
+      const day = parseInt(p0, 10);
+      const month = months[p1.toLowerCase().slice(0,3)];
+      const year = parseInt(p2, 10);
+      return new Date(year, month, day);
+    }
+    const day = parseInt(p0, 10);
+    const month = parseInt(p1, 10) - 1;
+    let year = parseInt(p2, 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+  const d = new Date(dStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function resolveTargetShowroom(
+  salespersonName: string,
+  month: number,
+  year: number,
+  allUsers: any[],
+  allRows: any[]
+): string {
+  const sNameLower = salespersonName.trim().toLowerCase();
+  const userProfile = allUsers.find(u => u.name.trim().toLowerCase() === sNameLower);
+
+  const monthSales = allRows.filter(r => {
+    if (!r.salesperson || r.salesperson.trim().toLowerCase() !== sNameLower) return false;
+    const d = parseSafeDate(r.date);
+    return d && d.getMonth() + 1 === month && d.getFullYear() === year;
+  });
+
+  if (monthSales.length > 0) {
+    const positiveSales = monthSales.filter(r => r.grossSales > 0);
+    if (positiveSales.length > 0) {
+      const counts: Record<string, number> = {};
+      positiveSales.forEach(r => {
+        const room = r.showroom || r.region;
+        if (room) counts[room] = (counts[room] || 0) + r.grossSales;
+      });
+      const bestRoom = Object.keys(counts).sort((a,b) => counts[b] - counts[a])[0];
+      if (bestRoom) return bestRoom;
+    }
+    const counts: Record<string, number> = {};
+    monthSales.forEach(r => {
+      const room = r.showroom || r.region;
+      if (room) counts[room] = (counts[room] || 0) + 1;
+    });
+    const bestRoom = Object.keys(counts).sort((a,b) => counts[b] - counts[a])[0];
+    if (bestRoom) return bestRoom;
+  }
+
+  // If month is in current profile timeframe (e.g. Sep 2026 onwards), use current profile showroom if available
+  if (userProfile?.showroom && (year > 2026 || (year === 2026 && month >= 9))) {
+    return userProfile.showroom;
+  }
+
+  // If past month with no transactions, check closest past transactions
+  const targetTime = new Date(year, month - 1, 15).getTime();
+  const pastSales = allRows.filter(r => {
+    if (!r.salesperson || r.salesperson.trim().toLowerCase() !== sNameLower) return false;
+    const d = parseSafeDate(r.date);
+    return d && d.getTime() <= targetTime;
+  }).sort((a, b) => (parseSafeDate(b.date)?.getTime() || 0) - (parseSafeDate(a.date)?.getTime() || 0));
+
+  if (pastSales.length > 0) {
+    return pastSales[0].showroom || pastSales[0].region;
+  }
+
+  return userProfile?.showroom || userProfile?.region || '';
+}
+
+// Memory-Cached Getters
+async function getCachedSalespersons(): Promise<any[]> {
+  const now = Date.now();
+  if (salespersonsCache && (now - salespersonsCache.timestamp < CACHE_TTL)) {
+    return salespersonsCache.data;
+  }
+  const data = await getSalespersons();
+  salespersonsCache = { data, timestamp: now };
+  return data;
+}
+
+async function getCachedValidation(): Promise<any> {
+  const now = Date.now();
+  if (validationCache && (now - validationCache.timestamp < CACHE_TTL)) {
+    return validationCache.data;
+  }
+  const data = await getValidationData();
+  validationCache = { data, timestamp: now };
+  return data;
+}
+
+async function getCachedOPFData(): Promise<any[]> {
+  const now = Date.now();
+  if (opfDataCache && (now - opfDataCache.timestamp < CACHE_TTL)) {
+    return opfDataCache.data;
+  }
+  const data = await getOPFData();
+  opfDataCache = { data, timestamp: now };
+  return data;
+}
+
+async function getCachedTargets(): Promise<any[]> {
+  const now = Date.now();
+  if (targetsCache && (now - targetsCache.timestamp < CACHE_TTL)) {
+    return targetsCache.data;
+  }
+  const rawTargets = await getTargets();
+  const allUsers = await getCachedSalespersons();
+  const allRows = await getCachedOPFData();
+
+  const data = rawTargets.map(t => {
+    const [mStr, yStr] = t.monthYear.split('-');
+    const m = Number(mStr);
+    const y = Number(yStr);
+    const showroom = resolveTargetShowroom(t.salesperson, m, y, allUsers, allRows);
+    return { ...t, showroom };
+  });
+
+  targetsCache = { data, timestamp: now };
+  return data;
+}
+
+async function getCachedCodeMap(): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (codeMapCache && (now - codeMapCache.timestamp < CACHE_TTL)) {
+    return codeMapCache.data;
+  }
+  const data = await getUniqueOPFCodeMap();
+  codeMapCache = { data, timestamp: now };
+  return data;
+}
+
+function parseQuotedCSV(text: string): string[][] {
+  const result: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+    
+    if (inQuotes) {
+      if (char === '"') {
+        if (nextChar === '"') {
+          field += '"';
+          i++; // skip next quote
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        row.push(field);
+        field = "";
+      } else if (char === '\n' || char === '\r') {
+        row.push(field);
+        field = "";
+        if (row.some(val => val.trim() !== '')) {
+          result.push(row);
+        }
+        row = [];
+        if (char === '\r' && nextChar === '\n') {
+          i++; // Skip standard Windows line endings
+        }
+      } else {
+        field += char;
+      }
+    }
+  }
+  // push final field/row if any remaining
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    if (row.some(val => val.trim() !== '')) {
+      result.push(row);
+    }
+  }
+  return result;
+}
+
+async function getQuotationOptions(): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}1570941522`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch quotation options sheet');
+  }
+  const csvText = await response.text();
+  const rows = parseQuotedCSV(csvText);
+  return rows.slice(1).map(values => {
+    const clean = (val: string | undefined) => val ? val.trim() : '';
+    return {
+      design: clean(values[0]),
+      category: clean(values[1]),
+      type: clean(values[2]),
+      price: Number(clean(values[3]).replace(/[^0-9.]/g, '')) || 0,
+      brand: clean(values[4])
+    };
+  });
+}
+
+async function getCachedQuotationOptions(): Promise<any[]> {
+  const now = Date.now();
+  if (quotationOptionsCache && (now - quotationOptionsCache.timestamp < CACHE_TTL)) {
+    return quotationOptionsCache.data;
+  }
+  const data = await getQuotationOptions();
+  quotationOptionsCache = { data, timestamp: now };
+  return data;
+}
+
+async function getBankDetails(): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}2093321396`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch bank details sheet');
+  }
+  const csvText = await response.text();
+  const rows = parseQuotedCSV(csvText);
+  return rows.slice(1).map(values => {
+    const clean = (val: string | undefined) => val ? val.trim() : '';
+    return {
+      showroomOrRegion: clean(values[0]),
+      bankingDetails: clean(values[1])
+    };
+  });
+}
+
+async function getCachedBankDetails(): Promise<any[]> {
+  const now = Date.now();
+  if (bankDetailsCache && (now - bankDetailsCache.timestamp < CACHE_TTL)) {
+    return bankDetailsCache.data;
+  }
+  const data = await getBankDetails();
+  bankDetailsCache = { data, timestamp: now };
+  return data;
+}
+
+async function getQuotationHistory(): Promise<any[]> {
+  try {
+    const response = await fetch(`${BASE_URL}1236899347`);
+    if (!response.ok) return [];
+    const csvText = await response.text();
+    const lines = csvText.split(/\r?\n/);
+    if (lines.length <= 1) return [];
+    
+    return lines.slice(1).filter(line => line.trim() !== '').map(line => {
+      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+      const clean = (val: string | undefined) => val ? val.replace(/^"|"$/g, '').trim() : '';
+      return {
+        date: clean(values[0]),
+        quotationNumber: clean(values[1]),
+        opfCode: clean(values[2]),
+        salespersonId: clean(values[3]),
+        salespersonName: clean(values[4]),
+        brandName: clean(values[5]),
+        clientName: clean(values[6]),
+        mobileNumber: clean(values[7]),
+        emailId: clean(values[8]),
+        billingAddress: clean(values[9]),
+        shippingAddress: clean(values[10]),
+        subtotal: Number(values[11]) || 0,
+        gstIncluded: Number(values[12]) || 0,
+        freight: Number(values[13]) || 0,
+        grandTotal: Number(values[14]) || 0,
+        amountInWords: clean(values[15]),
+        docUrl: clean(values[16]),
+        pdfUrl: clean(values[17]),
+        productsJson: clean(values[18]),
+        timestamp: clean(values[19]) || ''
+      };
+    });
+  } catch (err) {
+    console.error('getQuotationHistory error:', err);
+    return [];
+  }
+}
+
+async function getCachedQuotationHistory(): Promise<any[]> {
+  const now = Date.now();
+  if (quotationHistoryCache && (now - quotationHistoryCache.timestamp < CACHE_TTL)) {
+    return quotationHistoryCache.data;
+  }
+  const data = await getQuotationHistory();
+  quotationHistoryCache = { data, timestamp: now };
+  return data;
+}
+
+// Authentication interceptor
+async function authenticate(req: express.Request): Promise<any | null> {
+  const userId = req.headers['x-user-id'] as string;
+  const password = req.headers['x-user-password'] as string;
+  
+  if (!userId || !password) return null;
+  
+  const list = await getCachedSalespersons();
+  const found = list.find(s => s.id.trim() === userId.trim() && s.password === password);
+  return found || null;
+}
+
+// Generate names of people managed by this user
+function getManagedSalespeople(u: any, allSalespersons: any[]): any[] {
+  if (!u.isManager) {
+    return [u];
+  }
+  const targetManagerName = u.name.trim().toLowerCase();
+  
+  const isMatchingManager = (managerAccessVal: string | undefined, name: string) => {
+    if (!managerAccessVal) return false;
+    const parts = managerAccessVal.split(/[;,]/).map(x => x.trim().toLowerCase());
+    return parts.includes(name);
+  };
+
+  return allSalespersons.filter(s => {
+    return s.id === u.id || isMatchingManager(s.managerAccess, targetManagerName);
+  });
+}
+
+function getManagerShowrooms(u: any, allSalespersons: any[]): Set<string> {
+  const rooms = new Set<string>();
+  const userShowroom = (u.showroom || '').trim();
+  const userRegion = (u.region || '').trim();
+
+  // Add the manager's own assigned showroom/region
+  if (userShowroom && userShowroom.toLowerCase() !== 'all' && userShowroom.toLowerCase() !== 'all regions') {
+    rooms.add(userShowroom);
+  }
+
+  if (userRegion && userRegion.toLowerCase() !== 'all' && userRegion.toLowerCase() !== 'all regions') {
+    rooms.add(userRegion);
+  }
+
+  // Also collect showrooms and regions from all managed staff (e.g., for multi-store / area managers)
+  const managed = getManagedSalespeople(u, allSalespersons);
+  for (const s of managed) {
+    if (s.showroom && s.showroom.trim().toLowerCase() !== 'all') {
+      rooms.add(s.showroom.trim());
+    }
+    if (s.region && s.region.trim().toLowerCase() !== 'all') {
+      rooms.add(s.region.trim());
+    }
+  }
+  return rooms;
+}
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // API 1: Login
+  app.post('/api/login', async (req, res) => {
+    try {
+      const { id, password } = req.body;
+      if (!id || !password) {
+        return res.status(400).json({ error: 'ID and Password are required' });
+      }
+      const list = await getCachedSalespersons();
+      const found = list.find(s => s.id.trim() === id.trim() && s.password === password);
+      if (!found) {
+        return res.status(401).json({ error: 'Invalid ID or Password' });
+      }
+      // Return user details without password
+      const { password: _, ...safeUser } = found;
+      res.json(safeUser);
+    } catch (err: any) {
+      console.error('API /api/login error:', err);
+      res.status(500).json({ error: 'Failed to authenticate user.' });
+    }
+  });
+
+  // API 2: Salespersons listing (scoped & sanitized)
+  app.get('/api/salespersons', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const all = await getCachedSalespersons();
+      if (!currentUser.isManager) {
+        const sanitized = [currentUser].map(({ password, ...rest }) => rest);
+        return res.json(sanitized);
+      }
+
+      const managed = getManagedSalespeople(currentUser, all);
+      const managedIds = new Set(managed.map(s => s.id));
+      const managerRooms = getManagerShowrooms(currentUser, all);
+      const allRows = await getCachedOPFData();
+
+      const peopleWithSalesInRoom = new Set(
+        allRows
+          .filter(r => isRowInManagerRooms(r.showroom || r.region, managerRooms))
+          .map(r => r.salesperson?.trim().toLowerCase())
+          .filter(Boolean)
+      );
+
+      const combined = all.filter(s => {
+        if (managedIds.has(s.id)) return true;
+        const sRoom = s.showroom || s.region;
+        if (sRoom && isRowInManagerRooms(sRoom, managerRooms)) return true;
+        if (peopleWithSalesInRoom.has(s.name.trim().toLowerCase())) return true;
+        return false;
+      });
+
+      // Strip password completely for all salespeople!
+      const sanitized = combined.map(({ password, ...rest }) => rest);
+      res.json(sanitized);
+    } catch (err: any) {
+      console.error('API /api/salespersons error:', err);
+      res.status(500).json({ error: 'Failed to access salesperson list.' });
+    }
+  });
+
+  // API 3: Targets listing (scoped)
+  app.get('/api/targets', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const all = await getCachedSalespersons();
+      if (!currentUser.isManager) {
+        const myName = currentUser.name.trim().toLowerCase();
+        const allTargets = await getCachedTargets();
+        const filtered = allTargets.filter(t => t.salesperson && t.salesperson.trim().toLowerCase() === myName);
+        return res.json(filtered);
+      }
+
+      const managed = getManagedSalespeople(currentUser, all);
+      const managerRooms = getManagerShowrooms(currentUser, all);
+      const allRows = await getCachedOPFData();
+
+      const relevantNames = new Set([
+        ...managed.map(s => s.name.trim().toLowerCase()),
+        ...all.filter(s => {
+          const sRoom = s.showroom || s.region;
+          return sRoom && isRowInManagerRooms(sRoom, managerRooms);
+        }).map(s => s.name.trim().toLowerCase()),
+        ...allRows
+          .filter(r => isRowInManagerRooms(r.showroom || r.region, managerRooms))
+          .map(r => r.salesperson?.trim().toLowerCase()).filter(Boolean)
+      ]);
+
+      const allTargets = await getCachedTargets();
+      const filtered = allTargets.filter(t => {
+        if (!t.salesperson) return false;
+        const nameLower = t.salesperson.trim().toLowerCase();
+        if (relevantNames.has(nameLower)) return true;
+        if (t.showroom && isRowInManagerRooms(t.showroom, managerRooms)) return true;
+        return false;
+      });
+      res.json(filtered);
+    } catch (err: any) {
+      console.error('API /api/targets error:', err);
+      res.status(500).json({ error: 'Failed to access targets.' });
+    }
+  });
+
+  // API 4: OPF sales reports (scoped)
+  app.get('/api/opf-data', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const all = await getCachedSalespersons();
+      const allRows = await getCachedOPFData();
+
+      if (!currentUser.isManager) {
+        const myName = currentUser.name.trim().toLowerCase();
+        const filtered = allRows.filter(o => o.salesperson && o.salesperson.trim().toLowerCase() === myName);
+        return res.json(filtered);
+      }
+
+      const managed = getManagedSalespeople(currentUser, all);
+      const managedNames = new Set(managed.map(s => s.name.trim().toLowerCase()));
+      const managerRooms = getManagerShowrooms(currentUser, all);
+
+      const filtered = allRows.filter(o => {
+        if (!o.salesperson) return false;
+        const rowRoom = o.showroom || o.region;
+        if (rowRoom && isRowInManagerRooms(rowRoom, managerRooms)) return true;
+        if (managedNames.has(o.salesperson.trim().toLowerCase())) return true;
+        return false;
+      });
+      res.json(filtered);
+    } catch (err: any) {
+      console.error('API /api/opf-data error:', err);
+      res.status(500).json({ error: 'Failed to access report data.' });
+    }
+  });
+
+  // API 5: Validation constants
+  app.get('/api/validation', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+      const val = await getCachedValidation();
+      res.json(val);
+    } catch (err: any) {
+      console.error('API /api/validation error:', err);
+      res.status(500).json({ error: 'Failed to access validation categories.' });
+    }
+  });
+
+  // API 6: Unique OPF Code Mapping
+  app.get('/api/code-map', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+      const map = await getCachedCodeMap();
+      res.json(map);
+    } catch (err: any) {
+      console.error('API /api/code-map error:', err);
+      res.status(500).json({ error: 'Failed to access code map.' });
+    }
+  });
+
+  // API 7: Submit Report (Secure Proxy)
+  app.post('/api/submit-report', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const SCRIPT_URL = process.env.REPORT_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbxEj3dWorwbqPT4c7EAKUSA-sXIRXEBrhl3bDk29td45-GwZDOGRgbNSTas-DJwN8Wx/exec';
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(req.body)
+      });
+
+      // Clear the OPF Data cache so that next polling request fetches fresh reports
+      opfDataCache = null;
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error('API /api/submit-report error:', err);
+      res.status(500).json({ error: err.message || 'Report submission failed internally.' });
+    }
+  });
+
+  // API 8: Next OPF Number (calculated securely via unfiltered cached OPF data)
+  app.get('/api/next-opf-sequence', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const salespersonName = req.query.salespersonName as string;
+      const visitType = req.query.visitType as string;
+
+      if (!salespersonName || !visitType) {
+        return res.status(400).json({ error: 'Salesperson name and Visit Type are required.' });
+      }
+
+      const codeMap = await getCachedCodeMap();
+      const opfData = await getCachedOPFData();
+
+      const now = new Date();
+      const month = (now.getMonth() + 1).toString();
+      const fy = '2627';
+
+      const key = `${visitType.trim().toLowerCase()}-${salespersonName.trim().toLowerCase()}`;
+      const salespersonCode = codeMap[key] || 'AR';
+
+      const searchPattern = `${fy}${salespersonCode}`;
+
+      const allSalespersonEntries = opfData.filter(o => {
+        return o.opf && o.opf.includes(searchPattern);
+      });
+
+      let maxSequence = 0;
+      if (allSalespersonEntries.length > 0) {
+        const sequences = allSalespersonEntries.map(o => {
+          const match = o.opf.match(/(\d+)$/);
+          return match ? parseInt(match[1], 10) : 0;
+        });
+        maxSequence = Math.max(...sequences, 0);
+      }
+
+      const nextSeq = maxSequence + 1;
+      const mm = month.padStart(2, '0');
+      const nn = nextSeq.toString().padStart(2, '0');
+      const opfNumber = `LND${mm}${fy}${salespersonCode}${nn}`;
+
+      res.json({ opfNumber });
+    } catch (err: any) {
+      console.error('API /api/next-opf-sequence error:', err);
+      res.status(500).json({ error: 'Failed to access sequence calculation.' });
+    }
+  });
+
+  // API 9: Fetch Quotation Product Options
+  app.get('/api/quotation-options', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+      const data = await getCachedQuotationOptions();
+      res.json(data);
+    } catch (err: any) {
+      console.error('API /api/quotation-options error:', err);
+      res.status(500).json({ error: 'Failed to load quotation products and charges.' });
+    }
+  });
+
+  // API 10: Fetch Quotation History (scoped to current user/manager)
+  app.get('/api/quotation-history', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const all = await getCachedSalespersons();
+      const managed = getManagedSalespeople(currentUser, all);
+      const allowedNames = managed.map(s => s.name.trim().toLowerCase());
+      const allowedIds = managed.map(s => s.id.trim().toLowerCase());
+
+      const data = await getCachedQuotationHistory();
+      
+      const filtered = data.filter(q => {
+        const qName = (q.salespersonName || '').trim().toLowerCase();
+        const qId = (q.salespersonId || '').trim().toLowerCase();
+        
+        // Match either by registered ID or registered user name
+        const matchId = qId && allowedIds.includes(qId);
+        const matchName = qName && allowedNames.includes(qName);
+        return matchId || matchName || qId === currentUser.id.trim().toLowerCase() || qName === currentUser.name.trim().toLowerCase();
+      });
+
+      res.json(filtered);
+    } catch (err: any) {
+      console.error('API /api/quotation-history error:', err);
+      res.status(500).json({ error: 'Failed to access quotation tracking logs.' });
+    }
+  });
+
+  // API 11: Calculate Next Quotation Sequence
+  app.get('/api/next-quotation-sequence', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      const history = await getCachedQuotationHistory();
+
+      // Find the last row with sequence pattern LNQ-2627-XXXX first, then fallback to LNQ-XXXX-XXXX
+      let lastSuffix = 6780; // default starting point (next is 6781)
+
+      for (let i = history.length - 1; i >= 0; i--) {
+        const qNum = history[i].quotationNumber;
+        if (qNum) {
+          const match = qNum.match(/LNQ-\d+-(\d+)/) || qNum.match(/LNQ-(\d+)/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num)) {
+              lastSuffix = num;
+              break;
+            }
+          }
+        }
+      }
+
+      const nextSeq = lastSuffix + 1;
+      const quotationNumber = `LNQ-2627-${nextSeq}`;
+      res.json({ quotationNumber });
+    } catch (err: any) {
+      console.error('API /api/next-quotation-sequence error:', err);
+      res.status(500).json({ error: 'Failed to calculate next sequence.' });
+    }
+  });
+
+  // API 12: Fetch Banking Details
+  app.get('/api/bank-details', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+      const data = await getCachedBankDetails();
+      res.json(data);
+    } catch (err: any) {
+      console.error('API /api/bank-details error:', err);
+      res.status(500).json({ error: 'Failed to load banking details.' });
+    }
+  });
+
+  // API 11: Create & Submit Quotation
+  app.get('/api/logo', async (req, res) => {
+    try {
+      const url = 'https://lh3.googleusercontent.com/d/1O6Sr-ArBZCTG-XnfNUlWnHprbUoNXyqu';
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch logo from drive: ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type') || 'image/png';
+      const base64 = Buffer.from(buffer).toString('base64');
+      res.json({ base64: `data:${contentType};base64,${base64}` });
+    } catch (err: any) {
+      console.error('API /api/logo error:', err);
+      res.json({ error: err.message, base64: null });
+    }
+  });
+
+  let brochureCache: string | null = null;
+  app.get('/api/brand-brochure', async (req, res) => {
+    try {
+      if (brochureCache) {
+        return res.json({ base64: brochureCache });
+      }
+      const url = 'https://docs.google.com/uc?export=download&id=1riNY0xpAE0RDJ5oDlpiaqo0HrqKvjrdt';
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch brochure from drive: ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      brochureCache = base64;
+      res.json({ base64 });
+    } catch (err: any) {
+      console.error('API /api/brand-brochure error:', err);
+      res.json({ error: err.message, base64: null });
+    }
+  });
+
+  app.post('/api/submit-quotation', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      let SCRIPT_URL = process.env.QUOTATION_SCRIPT_URL || '';
+      if (
+        !SCRIPT_URL || 
+        SCRIPT_URL.includes('AKfycbxEj3dWorwbqPT4c7EAKUSA-sXIRXEBrhl3bDk29td45-GwZDOGRgbNSTas-DJwN8Wx') || 
+        SCRIPT_URL.includes('AKfycbwtkrRO_UT6U4555HtORFB3noGWEY3RsKQ1mIRYT41qnvyNrT6Uhj8F51opKdv1gxsn') ||
+        SCRIPT_URL.includes('AKfycbzrgcDNHI9QtJjyBOPpgwpuITuw20JU65Xb7VhgsUNgtnvPIIpfGxEfUPzPZ9rzdg')
+      ) {
+        SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybp6LfVhfkzXT18-LxrQdjSeyamms-JgZsEjHfaz8Z89BM4wpDBSJaYrQ7ANkV0z8I/exec';
+      }
+
+      // Optimize: Submit text data first to Google Sheet (ultra-fast, response returned instantly)
+      const payloadFast = {
+        action: 'create-quotation-fast',
+        date: req.body.date,
+        quotationNumber: req.body.quotationNumber,
+        opfCode: req.body.opfCode,
+        brandName: req.body.brandName,
+        clientName: req.body.clientName,
+        mobileNumber: req.body.mobileNumber,
+        emailId: req.body.emailId,
+        billingAddress: req.body.billingAddress,
+        shippingAddress: req.body.shippingAddress,
+        subtotal: req.body.subtotal,
+        gstIncluded: req.body.gstIncluded,
+        freight: req.body.freight,
+        grandTotal: req.body.grandTotal,
+        amountInWords: req.body.amountInWords,
+        productsJson: req.body.productsJson,
+        salespersonId: currentUser.id,
+        salespersonName: currentUser.name
+      };
+
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payloadFast)
+      });
+
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseErr: any) {
+        console.error('Failed to parse Apps Script response as JSON. Raw response from Apps Script:', responseText);
+        return res.status(502).json({
+          error: 'Google Apps Script did not return a valid JSON format. Verify your script is deployed as "Web App" with access set to "Anyone", even anonymous.',
+          rawResponse: responseText.slice(0, 500)
+        });
+      }
+
+      // Invalidate the tracking cache so the next retrieve fetches fresh list
+      quotationHistoryCache = null;
+
+      if (responseData && responseData.status === 'success') {
+        // Return success instantly to client
+        res.json({
+          status: 'success',
+          docUrl: '',
+          pdfUrl: 'Pending Upload...',
+          message: 'Saved quotation data in real-time. PDF upload has started in the background.'
+        });
+
+        // Trigger background PDF upload to Google Drive without holding up the express request
+        if (req.body.pdfBase64) {
+          (async () => {
+            try {
+              console.log(`[Background Job] Saving and uploading PDF to Google Drive for invoice: ${req.body.quotationNumber}`);
+              const payloadPdf = {
+                action: 'upload-pdf-back',
+                quotationNumber: req.body.quotationNumber,
+                clientName: req.body.clientName,
+                pdfBase64: req.body.pdfBase64
+              };
+
+              const responsePdf = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'text/plain'
+                },
+                body: JSON.stringify(payloadPdf)
+              });
+              const pdfResText = await responsePdf.text();
+              console.log(`[Background Job] Success response for invoice: ${req.body.quotationNumber}:`, pdfResText);
+              // Invalidate cache again so once PDF is fully done it has the latest link in history
+              quotationHistoryCache = null;
+            } catch (bgErr: any) {
+              console.error(`[Background Job] PDF upload failed for invoice: ${req.body.quotationNumber}. Error:`, bgErr);
+            }
+          })();
+        }
+      } else {
+        res.status(400).json({ error: responseData.message || 'Failed to submit quotation sequence.' });
+      }
+    } catch (err: any) {
+      console.error('API /api/submit-quotation error:', err);
+      res.status(500).json({ error: err.message || 'Failed to save quotation and sync with database.' });
+    }
+  });
+
+  // API 14: Background PDF Upload Proxy
+  app.post('/api/upload-pdf-back', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: 'Unauthorized credentials.' });
+      }
+
+      let SCRIPT_URL = process.env.QUOTATION_SCRIPT_URL || '';
+      if (
+        !SCRIPT_URL || 
+        SCRIPT_URL.includes('AKfycbxEj3dWorwbqPT4c7EAKUSA-sXIRXEBrhl3bDk29td45-GwZDOGRgbNSTas-DJwN8Wx') || 
+        SCRIPT_URL.includes('AKfycbwtkrRO_UT6U4555HtORFB3noGWEY3RsKQ1mIRYT41qnvyNrT6Uhj8F51opKdv1gxsn') ||
+        SCRIPT_URL.includes('AKfycbzrgcDNHI9QtJjyBOPpgwpuITuw20JU65Xb7VhgsUNgtnvPIIpfGxEfUPzPZ9rzdg')
+      ) {
+        SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybp6LfVhfkzXT18-LxrQdjSeyamms-JgZsEjHfaz8Z89BM4wpDBSJaYrQ7ANkV0z8I/exec';
+      }
+
+      const payloadPdf = {
+        action: 'upload-pdf-back',
+        quotationNumber: req.body.quotationNumber,
+        clientName: req.body.clientName,
+        pdfBase64: req.body.pdfBase64
+      };
+
+      const responsePdf = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(payloadPdf)
+      });
+
+      const pdfResText = await responsePdf.text();
+      let pdfResData;
+      try {
+        pdfResData = JSON.parse(pdfResText);
+      } catch (e) {
+        pdfResData = { status: 'error', message: pdfResText };
+      }
+
+      // Invalidate cache so that history retrieval has the fresh Drive link
+      quotationHistoryCache = null;
+
+      res.json(pdfResData);
+    } catch (err: any) {
+      console.error('API /api/upload-pdf-back error:', err);
+      res.status(500).json({ error: err.message || 'Failed to upload PDF in background.' });
+    }
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[SECURE GATEWAY] Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

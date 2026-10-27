@@ -1,0 +1,8 @@
+{
+  "name": "Daily Sales Reporter",
+  "description": "A structured daily sales reporting system for salespersons with Google Sheets integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
