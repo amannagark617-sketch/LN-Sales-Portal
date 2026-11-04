@@ -62,15 +62,14 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
       doc.text(title, W / 2, 14, { align: 'center' });
       doc.setFontSize(10); doc.setTextColor(INK);
       doc.text(p.brand === 'Little Nap' ? 'LITTLE NAP RECLINERS' : p.brand.toUpperCase(), W / 2, 19.5, { align: 'center' });
-      doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(GREY);
-      doc.text(`No: ${m.number}`, W / 2, 24.5, { align: 'center' });
       doc.setFont('Helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(INK);
-      doc.text('Little Nap Designs Pvt. Ltd.', W - 15, 11, { align: 'right' });
+      doc.text('Little Nap Designs Pvt. Ltd.', W - 15, 10, { align: 'right' });
       doc.setFont('Helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(GREY);
-      doc.text('GSTIN: 06AACCL0576H1ZM', W - 15, 14.5, { align: 'right' });
-      doc.text('Email: enquiry@littlenap.in', W - 15, 18, { align: 'right' });
-      doc.text('Corp. Office: 844, M.G. Road, Ghitorni,', W - 15, 21.5, { align: 'right' });
-      doc.text('New Delhi - 110030, India', W - 15, 25, { align: 'right' });
+      doc.text('IVR Number: +91 8882800600', W - 15, 13.5, { align: 'right' });
+      doc.text('Email: enquiry@littlenap.in', W - 15, 17, { align: 'right' });
+      doc.text('GSTIN: 06AACCL0576H1ZM', W - 15, 20.5, { align: 'right' });
+      doc.text('Corp. Office: 844, M.G. Road, Ghitorni,', W - 15, 24, { align: 'right' });
+      doc.text('New Delhi - 110030, India', W - 15, 27.5, { align: 'right' });
       y = 31;
     } else {
       doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY);
@@ -118,8 +117,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
 
   heading(`${isPI ? 'PI' : 'QUOTATION'} DETAILS`);
   kv('Date:', m.date, 15); kv('Prepared by:', m.salespersonName, 112); y += 4.5;
-  kv('Number:', m.number, 15); kv('Employee ID:', m.salespersonId || 'N/A', 112); y += 4.5;
-  if (isPI && m.linkedQuotation) { kv('Against Quotation:', m.linkedQuotation, 15); y += 4.5; }
+  kv('Number:', m.number, 15); kv('Employee No:', m.salespersonId || 'N/A', 112); y += 4.5;
   y += 3;
 
   heading('CLIENT & DELIVERY');
@@ -184,7 +182,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   row('Sub Total', `Rs. ${money(t.subtotal)}`);
   if (t.overallDiscount > 0) row('Overall Discount', `- Rs. ${money(t.overallDiscount)}`);
   row('GST @ 18% (included)', `Rs. ${money(t.gstIncluded)}`);
-  if (p.freight.mode === 'extra') row('Freight, labour & insurance (extra)', `Rs. ${money(t.freightExtra)}`);
+  if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
   else row('Freight', 'Included');
   doc.setDrawColor(GOLD); doc.setLineWidth(0.5); doc.line(100, y - 3, W - 15, y - 3);
   y += 1.5;

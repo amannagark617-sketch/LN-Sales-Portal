@@ -20,7 +20,7 @@ export const BRAND_RULES: Record<Brand, {
   'Little Nap': {
     customisation: true,
     freightDefault: 'extra',
-    freightNote: 'Little Nap prices are inclusive of GST. Freight, labour and insurance are extra on actual.',
+    freightNote: 'Little Nap prices are inclusive of GST. Freight is extra, charged on actual.',
     prefix: 'LN'
   },
   'La-Z-Boy': {

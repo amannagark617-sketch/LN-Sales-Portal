@@ -1,173 +1,205 @@
 Brand,Category,Item,Variant,Price,Notes,Active,Order
-Little Nap,Living Room Recliners,Curve (SG),Motorised,65000,"Available in 3 colours: Blue, Brown, Green",Yes,1
-Little Nap,Living Room Recliners,Otium,Manual,43000,,Yes,2
-Little Nap,Living Room Recliners,Otium,Motorised,62000,,Yes,3
-Little Nap,Living Room Recliners,Quotium,Manual,43000,,Yes,4
-Little Nap,Living Room Recliners,Quotium,Motorised,62000,,Yes,5
-Little Nap,Living Room Recliners,Swift,Manual,43000,,Yes,6
-Little Nap,Living Room Recliners,Swift,Motorised,62000,,Yes,7
-Little Nap,Living Room Recliners,Versatil / Vercon,Manual,43000,,Yes,8
-Little Nap,Living Room Recliners,Versatil / Vercon,Motorised,62000,,Yes,9
-Little Nap,Living Room Recliners,Livo,Manual,43000,,Yes,10
-Little Nap,Living Room Recliners,Livo,Motorised,62000,,Yes,11
-Little Nap,Living Room Recliners,Quies,Manual,43000,,Yes,12
-Little Nap,Living Room Recliners,Quies,Motorised,62000,,Yes,13
-Little Nap,Living Room Recliners,Nirvana,Manual,49000,,Yes,14
-Little Nap,Living Room Recliners,Nirvana,Motorised,68000,,Yes,15
-Little Nap,Living Room Recliners,Urbania,Manual,49000,,Yes,16
-Little Nap,Living Room Recliners,Urbania,Motorised,68000,,Yes,17
-Little Nap,Living Room Recliners,Solitaire,Motorised,69000,Including premium fabric / leatherette,Yes,18
-Little Nap,Recliner Sofa,Niveo,Motorised,74500,Including premium fabric / leatherette,Yes,19
-Little Nap,Recliner Sofa,Two Seater Urbania,Manual,91000,,Yes,20
-Little Nap,Recliner Sofa,Two Seater Urbania,Motorised,129000,,Yes,21
-Little Nap,Recliner Sofa,Three Seater Urbania (Middle Seat Fixed),Manual,124000,,Yes,22
-Little Nap,Recliner Sofa,Three Seater Urbania (Middle Seat Fixed),Motorised,162000,,Yes,23
-Little Nap,Recliner Sofa,Three Seater Urbania (All Reclining),Motorised,189000,,Yes,24
-Little Nap,Recliner Sofa,Two Seater Sofa (Otium / Quies / Versatil / Vercon / Quotium / Swift),Manual,81000,,Yes,25
-Little Nap,Recliner Sofa,Two Seater Sofa (Otium / Quies / Versatil / Vercon / Quotium / Swift),Motorised,119000,,Yes,26
-Little Nap,Recliner Sofa,Three Seater Sofa (Otium / Quies / Versatil / Vercon / Quotium / Swift) - Middle Seat Fixed,Manual,102500,,Yes,27
-Little Nap,Recliner Sofa,Three Seater Sofa (Otium / Quies / Versatil / Vercon / Quotium / Swift) - Middle Seat Fixed,Motorised,140500,,Yes,28
-Little Nap,Recliner Sofa,Three Seater Sofa (Otium / Quies / Versatil / Vercon / Quotium / Swift) - All Reclining,Motorised,172000,,Yes,29
-Little Nap,Recliner Sofa,Corner Seat,Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,30
-Little Nap,Premium Sofa,Linea Two Seater,Premium Fabric,170000,Motorised only,Yes,31
-Little Nap,Premium Sofa,Linea Two Seater,Touch Leather,185000,Motorised only,Yes,32
-Little Nap,Premium Sofa,Linea Three Seater (Middle Seat Fixed),Premium Fabric,205000,Motorised only,Yes,33
-Little Nap,Premium Sofa,Linea Three Seater (Middle Seat Fixed),Touch Leather,230000,Motorised only,Yes,34
-Little Nap,Premium Sofa,Pulse Two Seater (With Headrest),Premium Fabric,180000,Motorised only,Yes,35
-Little Nap,Premium Sofa,Pulse Two Seater (With Headrest),Touch Leather,200000,Motorised only,Yes,36
-Little Nap,Premium Sofa,Pulse Three Seater (With Headrest),Premium Fabric,205000,Motorised only,Yes,37
-Little Nap,Premium Sofa,Pulse Three Seater (With Headrest),Touch Leather,230000,Motorised only,Yes,38
-Little Nap,Home Theater Recliners,Millor NX / Armonia NX,Motorised,52000,,Yes,39
-Little Nap,Home Theater Recliners,Armonia NX Plus,Motorised,56000,,Yes,40
-Little Nap,Home Theater Recliners,Moderni,Manual,49000,,Yes,41
-Little Nap,Home Theater Recliners,Moderni,Motorised,67500,,Yes,42
-Little Nap,Home Theater Recliners,Elegante,Manual,49000,,Yes,43
-Little Nap,Home Theater Recliners,Elegante,Motorised,67500,,Yes,44
-Little Nap,Home Theater Recliners,Armonia,Manual,49000,,Yes,45
-Little Nap,Home Theater Recliners,Armonia,Motorised,67500,,Yes,46
-Little Nap,Home Theater Recliners,Millor,Manual,49000,,Yes,47
-Little Nap,Home Theater Recliners,Millor,Motorised,67500,,Yes,48
-Little Nap,Home Theater Recliners,Eternia,Manual,49000,,Yes,49
-Little Nap,Home Theater Recliners,Eternia,Motorised,67500,,Yes,50
-Little Nap,Home Theater Recliners,Versatil HT,Manual,49000,,Yes,51
-Little Nap,Home Theater Recliners,Versatil HT,Motorised,67500,,Yes,52
-Little Nap,Home Theater Recliners,Lunar,Motorised,74500,Including premium fabric / leatherette,Yes,53
-Little Nap,Home Theater Recliners,Grande,Motorised,74500,Including premium fabric / leatherette,Yes,54
-Little Nap,Home Theater Recliners,Adorne,Motorised,84000,Including premium fabric / leatherette,Yes,55
-Little Nap,Home Theater Recliners,Aderia,Motorised,84000,Including premium fabric / leatherette,Yes,56
-Little Nap,Home Theater Recliners,Regalia,Motorised,84000,Including premium fabric / leatherette,Yes,57
-Little Nap,Home Theater Recliners,Flora,Motorised,84000,Including premium fabric / leatherette,Yes,58
-Little Nap,Home Theater Recliners,Ritz,Motorised,84000,Including premium fabric / leatherette,Yes,59
-Little Nap,Home Theater Recliners,Nuvo,Motorised,96000,Including premium fabric / leatherette,Yes,60
-Little Nap,Home Theater Recliners,Verve,Motorised,96000,Without veneer,Yes,61
-Little Nap,Home Theater Recliners,Primus,Motorised,96000,Including premium fabric / leatherette,Yes,62
-Little Nap,Home Theater Recliners,Ebony,Motorised,115000,Including premium fabric / leatherette,Yes,63
-Little Nap,Home Theater Recliners,Crescent,Motorised,115000,Including premium fabric / leatherette,Yes,64
-Little Nap,Home Theater Recliners,Mark,Motorised,115000,Including premium fabric / leatherette,Yes,65
-Little Nap,Home Theater Recliners,Fortuna - Dual Motor,Motorised,115000,Including premium fabric / leatherette,Yes,66
-Little Nap,Home Theater Recliners,Repose Bed Lounge (Fixed),Fixed,165000,Including premium fabric / leatherette,Yes,67
-Little Nap,Sliders,Armonia NX / Millor NX Slider,Standard,28000,,Yes,68
-Little Nap,Sliders,Lexus / Phoenix / Brio Slider,Standard,30000,,Yes,69
-Little Nap,Sliders,Millor Sofa Slider,Standard,32500,,Yes,70
-Little Nap,Sliders,Primus Slider / Ritz Slider,Standard,44000,Without veneer,Yes,71
-Little Nap,Upholstery,Varona - Aqua Shield (Premium Fabric),Per seat,5500,Other premium Italian leather available at extra cost,Yes,72
-Little Nap,Upholstery,Jorden / Fabric,Per seat,2800,Other premium Italian leather available at extra cost,Yes,73
-Little Nap,Upholstery,Opulia Plus Leatherette,Per seat,5500,Other premium Italian leather available at extra cost,Yes,74
-Little Nap,Upholstery,Cinepro (Premium Leatherette),Per seat,6500,Other premium Italian leather available at extra cost,Yes,75
-Little Nap,Upholstery,Touch Leather (Italian Collection),Per seat,23500,Other premium Italian leather available at extra cost,Yes,76
-Little Nap,Upholstery,Full Leather (Italian Collection),Per seat,39000,Other premium Italian leather available at extra cost,Yes,77
-Little Nap,Accessories,Lounger Storage,Per piece,12500,,Yes,78
-Little Nap,Accessories,Hidden Storage in Arm (Small),Per piece,4800,,Yes,79
-Little Nap,Accessories,Hidden Storage in Arm (Big),Per piece,6500,,Yes,80
-Little Nap,Accessories,Press Back,Per piece,5800,,Yes,81
-Little Nap,Single Motor Controls,Oval Backlit Switch / Backlit Remote / Backlit USB Switch,Per piece,3500,,Yes,82
-Little Nap,Single Motor Controls,Dynamic Type C Switch,Per piece,4500,,Yes,83
-Little Nap,Single Motor Controls,Multi Function Touch Cupholder,Per piece,10000,,Yes,84
-Little Nap,Single Motor Controls,Multi Function Touch Cupholder with Chiller,Per piece,13000,,Yes,85
-Little Nap,Dual Motor Controls,Oval Backlit Switch / Remote,Per piece,5500,,Yes,86
-Little Nap,Dual Motor Controls,Dynamic Type C Switch,Per piece,6500,,Yes,87
-Little Nap,Dual Motor Controls,Multi Function Touch Cup Holder with Chiller,Per piece,16000,,Yes,88
-Little Nap,Dual Motor Controls,Four Button Touch Switch with Backlit,Per piece,10000,,Yes,89
-Little Nap,Three Motor Controls,Tri-Logic (Backlit Switch with HOME Button & USB),Per piece,15000,,Yes,90
-Little Nap,Three Motor Controls,Dynamic Type C Switch,Per piece,15000,,Yes,91
-Little Nap,Other Accessories,Swivel Table with PVC Top (with & without edges),Per piece,10000,,Yes,92
-Little Nap,Other Accessories,Swivel Table with Cladded Top,Per piece,11500,,Yes,93
-Little Nap,Other Accessories,Embedded DST,Per piece,12000,,Yes,94
-Little Nap,Other Accessories,Flexible Touch Reading Light,Per piece,7500,,Yes,95
-Little Nap,Other Accessories,Reversible Cup Holder / Slave Cup Holder,Per piece,4800,,Yes,96
-Little Nap,Other Accessories,Light & Cool Cup Holder - Without any Recliner Control,Per piece,10500,,Yes,97
-Little Nap,Other Accessories,Lighted Glass Holder,Per piece,1500,,Yes,98
-Little Nap,Other Accessories,Premium Cup Holder,Per piece,1500,,Yes,99
-Little Nap,Other Accessories,Side Table in Laminate / Cladded,Per piece,8000,,Yes,100
-Little Nap,Other Accessories,Wireless Mobile Charging,Per piece,11000,,Yes,101
-Little Nap,Other Accessories,Openable Console with Wireless Charging Tray,Per piece,23500,,Yes,102
-Little Nap,Other Accessories,Table Storage,Per piece,5800,,Yes,103
-Little Nap,Other Accessories,Lighted Footrest,Per piece,1500,,Yes,104
-Little Nap,Other Accessories,Mushroom Lamp,Per piece,18000,,Yes,105
-Little Nap,Other Accessories,SS Lamp,Per piece,15000,,Yes,106
-Little Nap,Other Accessories,"Centre Table with 4 Puffy (30"" x 30"")",Plain,49000,,Yes,107
-Little Nap,Other Accessories,"Centre Table with 4 Puffy (30"" x 30"")",Bidding,60000,,Yes,108
-Little Nap,Other Accessories,"Single Puffy (14"" x 14"")",Plain,6000,,Yes,109
-Little Nap,Other Accessories,"Single Puffy (14"" x 14"")",Bidding,8000,,Yes,110
-Little Nap,Veneer Arm,"Veneer Arm Style 87 (Veneer finish with LED strip, front of arm)","6""-8""",15000,,Yes,111
-Little Nap,Veneer Arm,"Veneer Arm Style 87 (Veneer finish with LED strip, front of arm)","9""-12""",18000,,Yes,112
-Little Nap,Veneer Arm,Veneer Arm Style 88 (Veneer finish on top and front of arm),"6""-8""",15000,,Yes,113
-Little Nap,Veneer Arm,Veneer Arm Style 88 (Veneer finish on top and front of arm),"9""-12""",18000,,Yes,114
-Little Nap,Veneer Arm,Veneer Arm Style 89 (Veneer finish on top and front of arm),"6""-8""",10000,,Yes,115
-Little Nap,Veneer Arm,Veneer Arm Style 89 (Veneer finish on top and front of arm),"9""-12""",12000,,Yes,116
-Little Nap,Veneer Arm,Veneer Arm Style 90 (Veneer plank on top or front),"6""-8""",4000,,Yes,117
-Little Nap,Veneer Arm,Veneer Arm Style 90 (Veneer plank on top or front),"9""-12""",6000,,Yes,118
-Little Nap,Veneer Arm,Veneer Arm Style 91 (Veneer finish on top and front of arm),"6""-8""",15000,,Yes,119
-Little Nap,Veneer Arm,Veneer Arm Style 91 (Veneer finish on top and front of arm),"9""-12""",18000,,Yes,120
-Little Nap,Veneer Arm,Veneer Arm Style 92 (Veneer finish on top),"6""-8""",2000,,Yes,121
-Little Nap,Veneer Arm,Veneer Arm Style 92 (Veneer finish on top),"9""-12""",3500,,Yes,122
-Little Nap,Veneer Arm,Veneer Arm Style 93 (Veneer finish),"6""-8""",5000,,Yes,123
-Little Nap,Veneer Arm,Veneer Arm Style 93 (Veneer finish),"9""-12""",8000,,Yes,124
-Little Nap,Surcharges & Rules,Swivel Glider,Per piece,4000,Not available in HT models,Yes,125
-Little Nap,Surcharges & Rules,Head Motor and Dual Motor,Per piece,23500,,Yes,126
-Little Nap,Surcharges & Rules,Fixed Lounger (extra on manual recliner),Per piece,9000,,Yes,127
-Little Nap,Surcharges & Rules,Motorised Lounger (extra on motorised recliner),Per piece,11500,,Yes,128
-Little Nap,Surcharges & Rules,Customer-supplied Leatherette / Fabric upholstery (charge per seat),Per seat,2500,No warranty applies on customer-supplied upholstery,Yes,129
-Little Nap,Surcharges & Rules,Customer-supplied Leather upholstery (charge per seat),Per seat,5500,Acceptable hide size is 40 sqft minimum; no warranty applies,Yes,130
-Smart Comfort,Smart Comfort Collection,Cubo,Manual,29500,In leatherette / fabric,Yes,131
-Smart Comfort,Smart Comfort Collection,Amet,Manual,31500,In leatherette / fabric,Yes,132
-Smart Comfort,Smart Comfort Collection,Amet,Motorised,42500,In leatherette / fabric,Yes,133
-Smart Comfort,Smart Comfort Collection,Avion,Manual,21000,In leatherette / fabric,Yes,134
-Smart Comfort,Smart Comfort Collection,Avion,Motorised,28500,In leatherette / fabric,Yes,135
-Smart Comfort,Smart Comfort Collection,Helios,Manual,21000,In leatherette / fabric,Yes,136
-Smart Comfort,Smart Comfort Collection,Helios,Motorised,28500,In leatherette / fabric,Yes,137
-Smart Comfort,Smart Comfort Collection,Galaxy,Manual,21000,In leatherette / fabric,Yes,138
-Smart Comfort,Smart Comfort Collection,Galaxy,Motorised,29500,In leatherette / fabric,Yes,139
-Smart Comfort,Smart Comfort Collection,Galaxy (Swivel Glider),Manual,25000,In leatherette / fabric,Yes,140
-Smart Comfort,Smart Comfort Collection,Galaxy (Swivel Glider),Motorised,33000,In leatherette / fabric,Yes,141
-Smart Comfort,Smart Comfort Collection,Avion (Swivel Glider),Manual,25000,In leatherette / fabric,Yes,142
-Smart Comfort,Smart Comfort Collection,Avion (Swivel Glider),Motorised,32500,In leatherette / fabric,Yes,143
-Smart Comfort,Smart Comfort Collection,Helios (Swivel Glider),Manual,25000,In leatherette / fabric,Yes,144
-Smart Comfort,Smart Comfort Collection,Helios (Swivel Glider),Motorised,32500,In leatherette / fabric,Yes,145
-La-Z-Boy,La-Z-Boy Recliners,Rayna,Fabric - Manual,82000,,Yes,146
-La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Fabric - Manual,104000,,Yes,147
-La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Fabric - Dual Motorised,170000,,Yes,148
-La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Leather - Manual,170000,,Yes,149
-La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Leather - Dual Motorised,234000,,Yes,150
-La-Z-Boy,La-Z-Boy Recliners,Enzo,Fabric - Manual,125000,,Yes,151
-La-Z-Boy,La-Z-Boy Recliners,Cardinal,Fabric - Manual,125000,,Yes,152
-La-Z-Boy,La-Z-Boy Recliners,Cardinal,Fabric - Dual Motorised,190000,,Yes,153
-La-Z-Boy,La-Z-Boy Recliners,Cardinal,Leather - Manual,190000,,Yes,154
-La-Z-Boy,La-Z-Boy Recliners,Cardinal,Leather - Dual Motorised,255000,,Yes,155
-La-Z-Boy,La-Z-Boy Recliners,Charleston,Leather - Manual,170000,,Yes,156
-La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Fabric - Manual,125000,,Yes,157
-La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Fabric - Dual Motorised,190000,,Yes,158
-La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Leather - Manual,190000,,Yes,159
-La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Leather - Dual Motorised,255000,,Yes,160
-La-Z-Boy,La-Z-Boy Recliners,James,Leather - Manual,169000,,Yes,161
-La-Z-Boy,La-Z-Boy Recliners,Spectator,Leather - Dual Motorised,432000,,Yes,162
-La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Fabric - Manual,106000,,Yes,163
-La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Fabric - Dual Motorised,170000,,Yes,164
-La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Leather - Manual,170000,,Yes,165
-La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Leather - Dual Motorised,234000,,Yes,166
-La-Z-Boy,La-Z-Boy Recliners,Pinnacle (Glider Rocker),Fabric - Manual,139000,,Yes,167
-La-Z-Boy,La-Z-Boy Recliners,Greyson,Fabric - Manual,132000,,Yes,168
-La-Z-Boy,La-Z-Boy Recliners,Greyson,Leather - Manual,196000,,Yes,169
-La-Z-Boy,La-Z-Boy Recliners,Greyson (Love Seat),Leather - Manual,300000,,Yes,170
-La-Z-Boy,La-Z-Boy Recliners,Greyson 4 Motor (Home Theater Power Reclining Loveseat),Fabric,262000,,Yes,171
-La-Z-Boy,La-Z-Boy Recliners,Greyson 4 Motor (Home Theater Power Reclining Loveseat),Leather,335000,,Yes,172
+Little Nap,Living Room Recliners,Curve (SG),Single Seater - Motorised,65000,"Available in 3 colours: Blue, Brown, Green",Yes,1
+Little Nap,Living Room Recliners,Otium,Single Seater - Manual,43000,,Yes,2
+Little Nap,Living Room Recliners,Otium,Single Seater - Motorised,62000,,Yes,3
+Little Nap,Living Room Recliners,Otium,Two Seater - Manual,81000,,Yes,4
+Little Nap,Living Room Recliners,Otium,Two Seater - Motorised,119000,,Yes,5
+Little Nap,Living Room Recliners,Otium,Three Seater (Middle Seat Fixed) - Manual,102500,,Yes,6
+Little Nap,Living Room Recliners,Otium,Three Seater (Middle Seat Fixed) - Motorised,140500,,Yes,7
+Little Nap,Living Room Recliners,Otium,Three Seater (All Reclining) - Motorised,172000,,Yes,8
+Little Nap,Living Room Recliners,Otium,Corner Seat - Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,9
+Little Nap,Living Room Recliners,Quotium,Single Seater - Manual,43000,,Yes,10
+Little Nap,Living Room Recliners,Quotium,Single Seater - Motorised,62000,,Yes,11
+Little Nap,Living Room Recliners,Quotium,Two Seater - Manual,81000,,Yes,12
+Little Nap,Living Room Recliners,Quotium,Two Seater - Motorised,119000,,Yes,13
+Little Nap,Living Room Recliners,Quotium,Three Seater (Middle Seat Fixed) - Manual,102500,,Yes,14
+Little Nap,Living Room Recliners,Quotium,Three Seater (Middle Seat Fixed) - Motorised,140500,,Yes,15
+Little Nap,Living Room Recliners,Quotium,Three Seater (All Reclining) - Motorised,172000,,Yes,16
+Little Nap,Living Room Recliners,Quotium,Corner Seat - Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,17
+Little Nap,Living Room Recliners,Swift,Single Seater - Manual,43000,,Yes,18
+Little Nap,Living Room Recliners,Swift,Single Seater - Motorised,62000,,Yes,19
+Little Nap,Living Room Recliners,Swift,Two Seater - Manual,81000,,Yes,20
+Little Nap,Living Room Recliners,Swift,Two Seater - Motorised,119000,,Yes,21
+Little Nap,Living Room Recliners,Swift,Three Seater (Middle Seat Fixed) - Manual,102500,,Yes,22
+Little Nap,Living Room Recliners,Swift,Three Seater (Middle Seat Fixed) - Motorised,140500,,Yes,23
+Little Nap,Living Room Recliners,Swift,Three Seater (All Reclining) - Motorised,172000,,Yes,24
+Little Nap,Living Room Recliners,Swift,Corner Seat - Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,25
+Little Nap,Living Room Recliners,Versatil,Single Seater - Manual,43000,,Yes,26
+Little Nap,Living Room Recliners,Versatil,Single Seater - Motorised,62000,,Yes,27
+Little Nap,Living Room Recliners,Versatil,Two Seater - Manual,81000,,Yes,28
+Little Nap,Living Room Recliners,Versatil,Two Seater - Motorised,119000,,Yes,29
+Little Nap,Living Room Recliners,Versatil,Three Seater (Middle Seat Fixed) - Manual,102500,,Yes,30
+Little Nap,Living Room Recliners,Versatil,Three Seater (Middle Seat Fixed) - Motorised,140500,,Yes,31
+Little Nap,Living Room Recliners,Versatil,Three Seater (All Reclining) - Motorised,172000,,Yes,32
+Little Nap,Living Room Recliners,Versatil,Corner Seat - Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,33
+Little Nap,Living Room Recliners,Vercon,Single Seater - Manual,43000,,Yes,34
+Little Nap,Living Room Recliners,Vercon,Single Seater - Motorised,62000,,Yes,35
+Little Nap,Living Room Recliners,Vercon,Two Seater - Manual,81000,,Yes,36
+Little Nap,Living Room Recliners,Vercon,Two Seater - Motorised,119000,,Yes,37
+Little Nap,Living Room Recliners,Vercon,Three Seater (Middle Seat Fixed) - Manual,102500,,Yes,38
+Little Nap,Living Room Recliners,Vercon,Three Seater (Middle Seat Fixed) - Motorised,140500,,Yes,39
+Little Nap,Living Room Recliners,Vercon,Three Seater (All Reclining) - Motorised,172000,,Yes,40
+Little Nap,Living Room Recliners,Vercon,Corner Seat - Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,41
+Little Nap,Living Room Recliners,Quies,Single Seater - Manual,43000,,Yes,42
+Little Nap,Living Room Recliners,Quies,Single Seater - Motorised,62000,,Yes,43
+Little Nap,Living Room Recliners,Quies,Two Seater - Manual,81000,,Yes,44
+Little Nap,Living Room Recliners,Quies,Two Seater - Motorised,119000,,Yes,45
+Little Nap,Living Room Recliners,Quies,Three Seater (Middle Seat Fixed) - Manual,102500,,Yes,46
+Little Nap,Living Room Recliners,Quies,Three Seater (Middle Seat Fixed) - Motorised,140500,,Yes,47
+Little Nap,Living Room Recliners,Quies,Three Seater (All Reclining) - Motorised,172000,,Yes,48
+Little Nap,Living Room Recliners,Quies,Corner Seat - Motorised,55000,Confirm: the PDF footnote on corner seat pricing is cut off,Yes,49
+Little Nap,Living Room Recliners,Livo,Single Seater - Manual,43000,,Yes,50
+Little Nap,Living Room Recliners,Livo,Single Seater - Motorised,62000,,Yes,51
+Little Nap,Living Room Recliners,Nirvana,Single Seater - Manual,49000,,Yes,52
+Little Nap,Living Room Recliners,Nirvana,Single Seater - Motorised,68000,,Yes,53
+Little Nap,Living Room Recliners,Urbania,Single Seater - Manual,49000,,Yes,54
+Little Nap,Living Room Recliners,Urbania,Single Seater - Motorised,68000,,Yes,55
+Little Nap,Living Room Recliners,Urbania,Two Seater - Manual,91000,,Yes,56
+Little Nap,Living Room Recliners,Urbania,Two Seater - Motorised,129000,,Yes,57
+Little Nap,Living Room Recliners,Urbania,Three Seater (Middle Seat Fixed) - Manual,124000,,Yes,58
+Little Nap,Living Room Recliners,Urbania,Three Seater (Middle Seat Fixed) - Motorised,162000,,Yes,59
+Little Nap,Living Room Recliners,Urbania,Three Seater (All Reclining) - Motorised,189000,,Yes,60
+Little Nap,Living Room Recliners,Solitaire,Single Seater - Motorised,69000,Including premium fabric / leatherette,Yes,61
+Little Nap,Living Room Recliners,Niveo,Motorised,74500,Including premium fabric / leatherette,Yes,62
+Little Nap,Premium Sofa,Linea,Two Seater - Premium Fabric,170000,Motorised only,Yes,63
+Little Nap,Premium Sofa,Linea,Two Seater - Touch Leather,185000,Motorised only,Yes,64
+Little Nap,Premium Sofa,Linea,Three Seater (Middle Seat Fixed) - Premium Fabric,205000,Motorised only,Yes,65
+Little Nap,Premium Sofa,Linea,Three Seater (Middle Seat Fixed) - Touch Leather,230000,Motorised only,Yes,66
+Little Nap,Premium Sofa,Pulse (With Headrest),Two Seater - Premium Fabric,180000,Motorised only,Yes,67
+Little Nap,Premium Sofa,Pulse (With Headrest),Two Seater - Touch Leather,200000,Motorised only,Yes,68
+Little Nap,Premium Sofa,Pulse (With Headrest),Three Seater - Premium Fabric,205000,Motorised only,Yes,69
+Little Nap,Premium Sofa,Pulse (With Headrest),Three Seater - Touch Leather,230000,Motorised only,Yes,70
+Little Nap,Home Theater Recliners,Millor NX / Armonia NX,Motorised,52000,,Yes,71
+Little Nap,Home Theater Recliners,Armonia NX Plus,Motorised,56000,,Yes,72
+Little Nap,Home Theater Recliners,Moderni,Manual,49000,,Yes,73
+Little Nap,Home Theater Recliners,Moderni,Motorised,67500,,Yes,74
+Little Nap,Home Theater Recliners,Elegante,Manual,49000,,Yes,75
+Little Nap,Home Theater Recliners,Elegante,Motorised,67500,,Yes,76
+Little Nap,Home Theater Recliners,Armonia,Manual,49000,,Yes,77
+Little Nap,Home Theater Recliners,Armonia,Motorised,67500,,Yes,78
+Little Nap,Home Theater Recliners,Millor,Manual,49000,,Yes,79
+Little Nap,Home Theater Recliners,Millor,Motorised,67500,,Yes,80
+Little Nap,Home Theater Recliners,Eternia,Manual,49000,,Yes,81
+Little Nap,Home Theater Recliners,Eternia,Motorised,67500,,Yes,82
+Little Nap,Home Theater Recliners,Versatil HT,Manual,49000,,Yes,83
+Little Nap,Home Theater Recliners,Versatil HT,Motorised,67500,,Yes,84
+Little Nap,Home Theater Recliners,Lunar,Motorised,74500,Including premium fabric / leatherette,Yes,85
+Little Nap,Home Theater Recliners,Grande,Motorised,74500,Including premium fabric / leatherette,Yes,86
+Little Nap,Home Theater Recliners,Adorne,Motorised,84000,Including premium fabric / leatherette,Yes,87
+Little Nap,Home Theater Recliners,Aderia,Motorised,84000,Including premium fabric / leatherette,Yes,88
+Little Nap,Home Theater Recliners,Regalia,Motorised,84000,Including premium fabric / leatherette,Yes,89
+Little Nap,Home Theater Recliners,Flora,Motorised,84000,Including premium fabric / leatherette,Yes,90
+Little Nap,Home Theater Recliners,Ritz,Motorised,84000,Including premium fabric / leatherette,Yes,91
+Little Nap,Home Theater Recliners,Nuvo,Motorised,96000,Including premium fabric / leatherette,Yes,92
+Little Nap,Home Theater Recliners,Verve,Motorised,96000,Without veneer,Yes,93
+Little Nap,Home Theater Recliners,Primus,Motorised,96000,Including premium fabric / leatherette,Yes,94
+Little Nap,Home Theater Recliners,Ebony,Motorised,115000,Including premium fabric / leatherette,Yes,95
+Little Nap,Home Theater Recliners,Crescent,Motorised,115000,Including premium fabric / leatherette,Yes,96
+Little Nap,Home Theater Recliners,Mark,Motorised,115000,Including premium fabric / leatherette,Yes,97
+Little Nap,Home Theater Recliners,Fortuna - Dual Motor,Motorised,115000,Including premium fabric / leatherette,Yes,98
+Little Nap,Home Theater Recliners,Repose Bed Lounge (Fixed),Fixed,165000,Including premium fabric / leatherette,Yes,99
+Little Nap,Sliders,Armonia NX / Millor NX Slider,Standard,28000,,Yes,100
+Little Nap,Sliders,Lexus / Phoenix / Brio Slider,Standard,30000,,Yes,101
+Little Nap,Sliders,Millor Sofa Slider,Standard,32500,,Yes,102
+Little Nap,Sliders,Primus Slider / Ritz Slider,Standard,44000,Without veneer,Yes,103
+Little Nap,Upholstery,Varona - Aqua Shield (Premium Fabric),Per seat,5500,Other premium Italian leather available at extra cost,Yes,104
+Little Nap,Upholstery,Jorden / Fabric,Per seat,2800,Other premium Italian leather available at extra cost,Yes,105
+Little Nap,Upholstery,Opulia Plus Leatherette,Per seat,5500,Other premium Italian leather available at extra cost,Yes,106
+Little Nap,Upholstery,Cinepro (Premium Leatherette),Per seat,6500,Other premium Italian leather available at extra cost,Yes,107
+Little Nap,Upholstery,Touch Leather (Italian Collection),Per seat,23500,Other premium Italian leather available at extra cost,Yes,108
+Little Nap,Upholstery,Full Leather (Italian Collection),Per seat,39000,Other premium Italian leather available at extra cost,Yes,109
+Little Nap,Accessories,Lounger Storage,Per piece,12500,,Yes,110
+Little Nap,Accessories,Hidden Storage in Arm (Small),Per piece,4800,,Yes,111
+Little Nap,Accessories,Hidden Storage in Arm (Big),Per piece,6500,,Yes,112
+Little Nap,Accessories,Press Back,Per piece,5800,,Yes,113
+Little Nap,Single Motor Controls,Oval Backlit Switch / Backlit Remote / Backlit USB Switch,Per piece,3500,,Yes,114
+Little Nap,Single Motor Controls,Dynamic Type C Switch,Per piece,4500,,Yes,115
+Little Nap,Single Motor Controls,Multi Function Touch Cupholder,Per piece,10000,,Yes,116
+Little Nap,Single Motor Controls,Multi Function Touch Cupholder with Chiller,Per piece,13000,,Yes,117
+Little Nap,Dual Motor Controls,Oval Backlit Switch / Remote,Per piece,5500,,Yes,118
+Little Nap,Dual Motor Controls,Dynamic Type C Switch,Per piece,6500,,Yes,119
+Little Nap,Dual Motor Controls,Multi Function Touch Cup Holder with Chiller,Per piece,16000,,Yes,120
+Little Nap,Dual Motor Controls,Four Button Touch Switch with Backlit,Per piece,10000,,Yes,121
+Little Nap,Three Motor Controls,Tri-Logic (Backlit Switch with HOME Button & USB),Per piece,15000,,Yes,122
+Little Nap,Three Motor Controls,Dynamic Type C Switch,Per piece,15000,,Yes,123
+Little Nap,Other Accessories,Swivel Table with PVC Top (with & without edges),Per piece,10000,,Yes,124
+Little Nap,Other Accessories,Swivel Table with Cladded Top,Per piece,11500,,Yes,125
+Little Nap,Other Accessories,Embedded DST,Per piece,12000,,Yes,126
+Little Nap,Other Accessories,Flexible Touch Reading Light,Per piece,7500,,Yes,127
+Little Nap,Other Accessories,Reversible Cup Holder / Slave Cup Holder,Per piece,4800,,Yes,128
+Little Nap,Other Accessories,Light & Cool Cup Holder - Without any Recliner Control,Per piece,10500,,Yes,129
+Little Nap,Other Accessories,Lighted Glass Holder,Per piece,1500,,Yes,130
+Little Nap,Other Accessories,Premium Cup Holder,Per piece,1500,,Yes,131
+Little Nap,Other Accessories,Side Table in Laminate / Cladded,Per piece,8000,,Yes,132
+Little Nap,Other Accessories,Wireless Mobile Charging,Per piece,11000,,Yes,133
+Little Nap,Other Accessories,Openable Console with Wireless Charging Tray,Per piece,23500,,Yes,134
+Little Nap,Other Accessories,Table Storage,Per piece,5800,,Yes,135
+Little Nap,Other Accessories,Lighted Footrest,Per piece,1500,,Yes,136
+Little Nap,Other Accessories,Mushroom Lamp,Per piece,18000,,Yes,137
+Little Nap,Other Accessories,SS Lamp,Per piece,15000,,Yes,138
+Little Nap,Other Accessories,"Centre Table with 4 Puffy (30"" x 30"")",Plain,49000,,Yes,139
+Little Nap,Other Accessories,"Centre Table with 4 Puffy (30"" x 30"")",Bidding,60000,,Yes,140
+Little Nap,Other Accessories,"Single Puffy (14"" x 14"")",Plain,6000,,Yes,141
+Little Nap,Other Accessories,"Single Puffy (14"" x 14"")",Bidding,8000,,Yes,142
+Little Nap,Veneer Arm,"Veneer Arm Style 87 (Veneer finish with LED strip, front of arm)","6""-8""",15000,,Yes,143
+Little Nap,Veneer Arm,"Veneer Arm Style 87 (Veneer finish with LED strip, front of arm)","9""-12""",18000,,Yes,144
+Little Nap,Veneer Arm,Veneer Arm Style 88 (Veneer finish on top and front of arm),"6""-8""",15000,,Yes,145
+Little Nap,Veneer Arm,Veneer Arm Style 88 (Veneer finish on top and front of arm),"9""-12""",18000,,Yes,146
+Little Nap,Veneer Arm,Veneer Arm Style 89 (Veneer finish on top and front of arm),"6""-8""",10000,,Yes,147
+Little Nap,Veneer Arm,Veneer Arm Style 89 (Veneer finish on top and front of arm),"9""-12""",12000,,Yes,148
+Little Nap,Veneer Arm,Veneer Arm Style 90 (Veneer plank on top or front),"6""-8""",4000,,Yes,149
+Little Nap,Veneer Arm,Veneer Arm Style 90 (Veneer plank on top or front),"9""-12""",6000,,Yes,150
+Little Nap,Veneer Arm,Veneer Arm Style 91 (Veneer finish on top and front of arm),"6""-8""",15000,,Yes,151
+Little Nap,Veneer Arm,Veneer Arm Style 91 (Veneer finish on top and front of arm),"9""-12""",18000,,Yes,152
+Little Nap,Veneer Arm,Veneer Arm Style 92 (Veneer finish on top),"6""-8""",2000,,Yes,153
+Little Nap,Veneer Arm,Veneer Arm Style 92 (Veneer finish on top),"9""-12""",3500,,Yes,154
+Little Nap,Veneer Arm,Veneer Arm Style 93 (Veneer finish),"6""-8""",5000,,Yes,155
+Little Nap,Veneer Arm,Veneer Arm Style 93 (Veneer finish),"9""-12""",8000,,Yes,156
+Little Nap,Surcharges & Rules,Swivel Glider,Per piece,4000,Not available in HT models,Yes,157
+Little Nap,Surcharges & Rules,Head Motor and Dual Motor,Per piece,23500,,Yes,158
+Little Nap,Surcharges & Rules,Fixed Lounger (extra on manual recliner),Per piece,9000,,Yes,159
+Little Nap,Surcharges & Rules,Motorised Lounger (extra on motorised recliner),Per piece,11500,,Yes,160
+Little Nap,Surcharges & Rules,Customer-supplied Leatherette / Fabric upholstery (charge per seat),Per seat,2500,No warranty applies on customer-supplied upholstery,Yes,161
+Little Nap,Surcharges & Rules,Customer-supplied Leather upholstery (charge per seat),Per seat,5500,Acceptable hide size is 40 sqft minimum; no warranty applies,Yes,162
+Smart Comfort,Smart Comfort Collection,Cubo,Manual,29500,In leatherette / fabric,Yes,163
+Smart Comfort,Smart Comfort Collection,Amet,Manual,31500,In leatherette / fabric,Yes,164
+Smart Comfort,Smart Comfort Collection,Amet,Motorised,42500,In leatherette / fabric,Yes,165
+Smart Comfort,Smart Comfort Collection,Avion,Manual,21000,In leatherette / fabric,Yes,166
+Smart Comfort,Smart Comfort Collection,Avion,Motorised,28500,In leatherette / fabric,Yes,167
+Smart Comfort,Smart Comfort Collection,Helios,Manual,21000,In leatherette / fabric,Yes,168
+Smart Comfort,Smart Comfort Collection,Helios,Motorised,28500,In leatherette / fabric,Yes,169
+Smart Comfort,Smart Comfort Collection,Galaxy,Manual,21000,In leatherette / fabric,Yes,170
+Smart Comfort,Smart Comfort Collection,Galaxy,Motorised,29500,In leatherette / fabric,Yes,171
+Smart Comfort,Smart Comfort Collection,Galaxy (Swivel Glider),Manual,25000,In leatherette / fabric,Yes,172
+Smart Comfort,Smart Comfort Collection,Galaxy (Swivel Glider),Motorised,33000,In leatherette / fabric,Yes,173
+Smart Comfort,Smart Comfort Collection,Avion (Swivel Glider),Manual,25000,In leatherette / fabric,Yes,174
+Smart Comfort,Smart Comfort Collection,Avion (Swivel Glider),Motorised,32500,In leatherette / fabric,Yes,175
+Smart Comfort,Smart Comfort Collection,Helios (Swivel Glider),Manual,25000,In leatherette / fabric,Yes,176
+Smart Comfort,Smart Comfort Collection,Helios (Swivel Glider),Motorised,32500,In leatherette / fabric,Yes,177
+La-Z-Boy,La-Z-Boy Recliners,Rayna,Fabric - Manual,82000,,Yes,178
+La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Fabric - Manual,104000,,Yes,179
+La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Fabric - Dual Motorised,170000,,Yes,180
+La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Leather - Manual,170000,,Yes,181
+La-Z-Boy,La-Z-Boy Recliners,Harbor Town,Leather - Dual Motorised,234000,,Yes,182
+La-Z-Boy,La-Z-Boy Recliners,Enzo,Fabric - Manual,125000,,Yes,183
+La-Z-Boy,La-Z-Boy Recliners,Cardinal,Fabric - Manual,125000,,Yes,184
+La-Z-Boy,La-Z-Boy Recliners,Cardinal,Fabric - Dual Motorised,190000,,Yes,185
+La-Z-Boy,La-Z-Boy Recliners,Cardinal,Leather - Manual,190000,,Yes,186
+La-Z-Boy,La-Z-Boy Recliners,Cardinal,Leather - Dual Motorised,255000,,Yes,187
+La-Z-Boy,La-Z-Boy Recliners,Charleston,Leather - Manual,170000,,Yes,188
+La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Fabric - Manual,125000,,Yes,189
+La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Fabric - Dual Motorised,190000,,Yes,190
+La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Leather - Manual,190000,,Yes,191
+La-Z-Boy,La-Z-Boy Recliners,Dreamtime,Leather - Dual Motorised,255000,,Yes,192
+La-Z-Boy,La-Z-Boy Recliners,James,Leather - Manual,169000,,Yes,193
+La-Z-Boy,La-Z-Boy Recliners,Spectator,Leather - Dual Motorised,432000,,Yes,194
+La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Fabric - Manual,106000,,Yes,195
+La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Fabric - Dual Motorised,170000,,Yes,196
+La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Leather - Manual,170000,,Yes,197
+La-Z-Boy,La-Z-Boy Recliners,Pinnacle,Leather - Dual Motorised,234000,,Yes,198
+La-Z-Boy,La-Z-Boy Recliners,Pinnacle (Glider Rocker),Fabric - Manual,139000,,Yes,199
+La-Z-Boy,La-Z-Boy Recliners,Greyson,Fabric - Manual,132000,,Yes,200
+La-Z-Boy,La-Z-Boy Recliners,Greyson,Leather - Manual,196000,,Yes,201
+La-Z-Boy,La-Z-Boy Recliners,Greyson (Love Seat),Leather - Manual,300000,,Yes,202
+La-Z-Boy,La-Z-Boy Recliners,Greyson 4 Motor (Home Theater Power Reclining Loveseat),Fabric,262000,,Yes,203
+La-Z-Boy,La-Z-Boy Recliners,Greyson 4 Motor (Home Theater Power Reclining Loveseat),Leather,335000,,Yes,204
