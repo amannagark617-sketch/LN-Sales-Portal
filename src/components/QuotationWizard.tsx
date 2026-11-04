@@ -5,10 +5,10 @@ import {
   fetchPriceList, fetchNextNumber, saveQuotation, fetchBankDetails, fetchQuotationHistory, QuotationData
 } from '../services/dataService';
 import {
-  Brand, BRANDS, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload
+  Brand, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload
 } from '../quotation/types';
 import {
-  BRAND_RULES, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
+  BRAND_RULES, allowedBrands, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { SearchSelect, SelectOption } from './SearchSelect';
@@ -26,9 +26,10 @@ const btnPrimary = 'inline-flex items-center justify-center gap-2 h-12 rounded-x
 const btnGhost = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 bg-white text-slate-800 px-5 text-sm font-bold hover:border-slate-400 disabled:opacity-40';
 const fmt0 = (n: number) => 'Rs. ' + Math.round(n).toLocaleString('en-IN');
 
+const QUOTE_BRANDS: Brand[] = ['Little Nap', 'La-Z-Boy'];
 const STEPS = ['Brand', 'Customer', 'Items', 'Pricing', 'Review'] as const;
 const STEP_HELP = [
-  ['Choose the brand', 'One brand per quotation. Brands cannot be mixed.'],
+  ['Choose the brand', 'La-Z-Boy cannot be mixed with Little Nap. The Smart Comfort range is part of Little Nap.'],
   ['Customer details', 'Who is this quotation for?'],
   ['Add items', 'Pick the model, then add upholstery and add-ons for each item.'],
   ['Discount and freight', 'Optional discount, and how freight is charged.'],
@@ -97,6 +98,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const [sameAddr, setSameAddr] = useState(true);
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [discount, setDiscount] = useState(emptyDiscount());
+  const [termsOverride, setTermsOverride] = useState<string[] | null>(null);
   const [gstRate, setGstRate] = useState(18);
   const [discMode, setDiscMode] = useState<'whole' | 'item'>('whole');
   const [freight, setFreight] = useState<{ mode: 'included' | 'extra'; amount: number }>({ mode: 'extra', amount: 0 });
@@ -149,10 +151,11 @@ export function QuotationWizard({ salesperson }: Props) {
     if (lines.length && !window.confirm(`Changing to ${b} will remove the items already added. Continue?`)) return;
     setBrand(b);
     setLines([]);
+    setTermsOverride(null);
     setFreight({ mode: BRAND_RULES[b].freightDefault, amount: 0 });
   };
 
-  const brandRows = useMemo(() => (price?.rows || []).filter(r => r.brand === brand && r.active), [price, brand]);
+  const brandRows = useMemo(() => (price?.rows || []).filter(r => allowedBrands(brand).includes(r.brand) && r.active), [price, brand]);
   const categories = useMemo(() => {
     const seen: string[] = [];
     brandRows.slice().sort((a, b) => a.order - b.order).forEach(r => { if (!seen.includes(r.category)) seen.push(r.category); });
@@ -161,8 +164,8 @@ export function QuotationWizard({ salesperson }: Props) {
 
   // categories shown for the main item vs add-ons (Little Nap only)
   const ADDON_CATS = ['Upholstery', 'Accessories', 'Single Motor Controls', 'Dual Motor Controls', 'Three Motor Controls', 'Other Accessories', 'Veneer Arm', 'Surcharges & Rules'];
-  const mainCats = categories.filter(c => !(rule.customisation && ADDON_CATS.includes(c)));
-  const addonCats = categories.filter(c => rule.customisation && ADDON_CATS.includes(c));
+  const mainCats = categories.filter(c => !ADDON_CATS.includes(c));
+  const addonCats = categories.filter(c => ADDON_CATS.includes(c));
 
   const itemsIn = (cat: string) => {
     const seen: string[] = [];
@@ -197,9 +200,9 @@ export function QuotationWizard({ salesperson }: Props) {
     });
     return out;
   }, [brandRows, categories]);
-  const upholsteryOptions: SelectOption[] = brandRows.filter(r => r.category === 'Upholstery').sort((a, b) => a.order - b.order)
+  const upholsteryOptions: SelectOption[] = brandRows.filter(r => r.brand === 'Little Nap' && r.category === 'Upholstery').sort((a, b) => a.order - b.order)
     .map(r => ({ value: keyOf(r), label: r.item, right: fmt0(r.price) + ' / seat' }));
-  const addonSelectOptions: SelectOption[] = brandRows.filter(r => addonCats.includes(r.category) && r.category !== 'Upholstery').sort((a, b) => a.order - b.order)
+  const addonSelectOptions: SelectOption[] = brandRows.filter(r => r.brand === 'Little Nap' && addonCats.includes(r.category) && r.category !== 'Upholstery').sort((a, b) => a.order - b.order)
     .map(r => ({ value: keyOf(r), label: r.variant && r.variant !== 'Per piece' ? `${r.item} (${r.variant})` : r.item, sub: r.category, right: fmt0(r.price) }));
 
   const addPicked = (row: PriceRow) => setLines(l => [...l, rowToLine(row)]);
@@ -213,8 +216,20 @@ export function QuotationWizard({ salesperson }: Props) {
     setLines(ls => ls.map(l => l.id === lid ? { ...l, options: [...l.options, rowToOption(r)] } : l));
   };
 
-  const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight, gstRate }), [brand, docType, lines, discount, freight, gstRate]);
+  // Terms: Little Nap terms, plus the Smart Comfort terms when a Smart Comfort item is in the quotation
+  const defaultTerms = useMemo(() => {
+    const all = price?.terms || [];
+    const out: string[] = [];
+    const add = (b: string) => termsFor(all, b).forEach(t => { if (!out.includes(t)) out.push(t); });
+    add(brand);
+    if (brand === 'Little Nap' && lines.some(l => l.brand === 'Smart Comfort')) add('Smart Comfort');
+    return out;
+  }, [price, brand, lines]);
+  const effectiveTerms = termsOverride ?? defaultTerms;
+
+  const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean) }), [brand, docType, lines, discount, freight, gstRate, effectiveTerms]);
   const totals = useMemo(() => calcTotals(payload), [payload]);
+
 
   const stepError = (s: number): string => {
     if (s === 1) {
@@ -237,7 +252,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
     setBilling(''); setShipping(''); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
-    setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole');
+    setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
   };
 
   const meta = (number: string): PdfMeta => ({
@@ -246,7 +261,7 @@ export function QuotationWizard({ salesperson }: Props) {
     mobile: mobile.trim(), email: email.trim(),
     billing: billing.trim(), shipping: (sameAddr ? billing : shipping).trim(),
     salespersonName: salesperson.name, salespersonId: employeeNo.trim() || salesperson.id, bank,
-    terms: termsFor(price?.terms || [], brand), logoBase64: logo
+    terms: effectiveTerms.map(t => t.trim()).filter(Boolean), logoBase64: logo
   });
 
   const buildBytes = async (number: string): Promise<Uint8Array> => {
@@ -298,7 +313,7 @@ export function QuotationWizard({ salesperson }: Props) {
     try { const j = JSON.parse(r.productsJson); if (j && j.v === 2) p = j; } catch { /* legacy record */ }
     if (!p) { window.alert('This record was made with the old generator and cannot be reopened here.'); return; }
     const b = p.brand;
-    setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0) ? 'item' : 'whole');
+    setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setTermsOverride(p.terms && p.terms.length ? p.terms : null); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0) ? 'item' : 'whole');
     setClientName(r.clientName); setCompany(''); setMobile(String(r.mobileNumber || '')); setEmail(r.emailId || '');
     setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(!r.shippingAddress || r.shippingAddress === r.billingAddress);
     setAttachments([]); setSaved(null); setError('');
@@ -429,13 +444,13 @@ export function QuotationWizard({ salesperson }: Props) {
               )}
 
               {step === 0 && (
-                <div className="grid sm:grid-cols-3 gap-3">
-                  {BRANDS.map(b => (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {QUOTE_BRANDS.map(b => (
                     <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI'}
                       className={`text-left p-5 rounded-2xl border-2 bg-white ${brand === b ? 'border-slate-900 shadow-[0_8px_30px_rgba(15,23,42,0.08)]' : 'border-slate-200 hover:border-slate-400'} disabled:opacity-60`}>
                       <div className="font-bold text-base">{b}</div>
                       <div className="text-xs text-slate-500 mt-2 leading-relaxed">
-                        {BRAND_RULES[b].customisation ? 'Fully customisable' : 'No customisation'}<br />
+                        {b === 'Little Nap' ? 'Includes the Smart Comfort range' : 'No customisation'}<br />
                         {BRAND_RULES[b].freightDefault === 'included' ? 'Freight included' : 'Freight extra'}
                       </div>
                     </button>
@@ -497,7 +512,7 @@ export function QuotationWizard({ salesperson }: Props) {
                           <div><div className={label}>Quantity</div><Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} /></div>
                         </div>
 
-                        {rule.customisation && (
+                        {BRAND_RULES[l.brand].customisation && (
                           <div className="mt-5 space-y-5">
                             <div>
                               <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Upholstery <span className="font-normal normal-case tracking-normal text-slate-400">· seats per piece</span></div>
@@ -604,6 +619,29 @@ export function QuotationWizard({ salesperson }: Props) {
                       <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
                       <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200"><span>Grand total</span><span>{formatINR(totals.grandTotal)}</span></div>
                     </div>
+                  </div>
+
+                  <div className={card}>
+                    <h3 className="font-bold text-sm mb-2">Bank details</h3>
+                    {bank ? <p className="text-sm text-slate-700 whitespace-pre-line">{bank}</p> : <p className="text-sm text-slate-500">No bank details found for your showroom.</p>}
+                  </div>
+
+                  <div className={card}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-sm">Terms and conditions</h3>
+                      {termsOverride && <button className="text-xs font-semibold underline text-slate-600" onClick={() => setTermsOverride(null)}>Reset to default</button>}
+                    </div>
+                    <div className="space-y-3">
+                      {effectiveTerms.map((t, i) => (
+                        <div key={i} className="flex gap-2 items-start">
+                          <span className="text-xs font-bold text-slate-400 pt-3.5 w-5 shrink-0">{i + 1}.</span>
+                          <textarea className={`${area} flex-1`} rows={Math.max(2, Math.ceil(t.length / 42))} value={t}
+                            onChange={e => setTermsOverride(effectiveTerms.map((x, j) => j === i ? e.target.value : x))} />
+                          <button className="text-red-600 pt-3" aria-label="Remove term" onClick={() => setTermsOverride(effectiveTerms.filter((_, j) => j !== i))}><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <button className={`${btnGhost} !h-10 mt-3`} onClick={() => setTermsOverride([...effectiveTerms, ''])}><Plus size={15} /> Add a term</button>
                   </div>
 
                   {docType === 'PI' && (

@@ -76,6 +76,8 @@ export interface QuotePayload {
   freight: Freight;
   /** GST % already contained in the prices; defaults to 18 */
   gstRate?: number;
+  /** terms and conditions as shown on the document (editable by the user) */
+  terms?: string[];
 }
 
 export interface LineTotals {

@@ -192,7 +192,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   doc.text(numberToWords(t.grandTotal), 15, y);
   y += 8;
 
-  if (isPI && m.bank) {
+  if (m.bank) {
     heading('BANK DETAILS');
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(GREY);
     doc.splitTextToSize(m.bank, W - 35).forEach((s: string) => { space(5); doc.text(s, 15, y); y += 4.2; });

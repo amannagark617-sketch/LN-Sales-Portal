@@ -37,6 +37,12 @@ export const BRAND_RULES: Record<Brand, {
   }
 };
 
+/** Smart Comfort is part of Little Nap, so the two can share a quotation. La-Z-Boy stands alone. */
+export function allowedBrands(b: Brand): Brand[] {
+  if (b === 'Little Nap') return ['Little Nap', 'Smart Comfort'];
+  return [b];
+}
+
 export const emptyDiscount = (): Discount => ({ mode: 'pct', value: 0 });
 
 export function discountAmount(base: number, d: Discount | undefined): number {
@@ -103,7 +109,7 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
 
   p.lines.forEach((l, idx) => {
     const label = `Item ${idx + 1} (${l.item || 'unnamed'})`;
-    if (l.brand !== p.brand) problems.push(`${label} belongs to ${l.brand}. ${p.brand} and ${l.brand} cannot be in the same quotation.`);
+    if (!allowedBrands(p.brand).includes(l.brand)) problems.push(`${label} belongs to ${l.brand}. ${p.brand} and ${l.brand} cannot be in the same quotation.`);
     if (num(l.qty) < 1) problems.push(`${label}: quantity must be at least 1.`);
     if (num(l.unitPrice) < 0) problems.push(`${label}: price cannot be negative.`);
     if (l.custom) {
@@ -114,10 +120,10 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
       else if (r2(row.price) !== r2(num(l.listPrice))) problems.push(`${label}: the price list has changed since it was picked. Please re-select it.`);
       if (r2(num(l.unitPrice)) !== r2(num(l.listPrice))) problems.push(`${label}: the price cannot be changed. Use a discount instead.`);
     }
-    if (l.options.length && !rule.customisation) problems.push(`${label}: ${p.brand} has no customisation.`);
+    if (l.options.length && !BRAND_RULES[l.brand]?.customisation) problems.push(`${label}: ${l.brand} has no customisation.`);
     l.options.forEach(o => {
       const oLabel = `${label} / ${o.item || 'option'}`;
-      if (o.brand !== p.brand) problems.push(`${oLabel} belongs to ${o.brand}.`);
+      if (o.brand !== l.brand) problems.push(`${oLabel} belongs to ${o.brand}, not ${l.brand}.`);
       if (num(o.qty) <= 0) problems.push(`${oLabel}: quantity must be above zero.`);
       if (o.custom) {
         problems.push(`${oLabel}: only items from the price list can be added.`);
@@ -130,6 +136,9 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
     });
   });
 
+  if (p.terms !== undefined) {
+    if (!Array.isArray(p.terms) || p.terms.length > 40 || p.terms.some(t => typeof t !== 'string' || t.length > 800)) problems.push('The terms and conditions are not valid.');
+  }
   if (p.gstRate !== undefined && !(Number(p.gstRate) >= 0 && Number(p.gstRate) <= 28)) problems.push('GST % must be between 0 and 28.');
   if (p.freight.mode === 'extra' && !(num(p.freight.amount) > 0)) problems.push('Enter the freight amount, or choose "Included".');
   return problems;
