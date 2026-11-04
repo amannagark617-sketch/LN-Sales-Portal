@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Plus, Trash2, Upload, Download, FileCheck, ArrowLeft, ArrowRight, AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { Check, Plus, Minus, Trash2, Upload, Download, FileCheck, ArrowLeft, ArrowRight, AlertCircle, RefreshCw, Search } from 'lucide-react';
 import { Salesperson, BankDetails } from '../types';
 import {
   fetchPriceList, fetchNextNumber, saveQuotation, fetchBankDetails, fetchQuotationHistory, QuotationData
@@ -12,6 +12,7 @@ import {
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { SearchSelect, SelectOption } from './SearchSelect';
+import { ItemPicker, ItemGroup } from './ItemPicker';
 
 const GOLD = '#9B7C50';
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -57,6 +58,23 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
+const Stepper = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
+  <div className="inline-flex items-center h-10 rounded-xl border border-slate-200 bg-white">
+    <button type="button" aria-label="Decrease" className="w-10 h-10 flex items-center justify-center text-slate-700 disabled:opacity-30" disabled={value <= 1} onClick={() => onChange(Math.max(1, value - 1))}><Minus size={15} /></button>
+    <span className="w-8 text-center text-sm font-bold">{value}</span>
+    <button type="button" aria-label="Increase" className="w-10 h-10 flex items-center justify-center text-slate-700" onClick={() => onChange(value + 1)}><Plus size={15} /></button>
+  </div>
+);
+
+const DiscountInput = ({ value, onChange }: { value: { mode: 'pct' | 'amt'; value: number }; onChange: (d: { mode: 'pct' | 'amt'; value: number }) => void }) => (
+  <div className="flex gap-2">
+    <select className="h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={value.mode} onChange={e => onChange({ ...value, mode: e.target.value as 'pct' | 'amt' })}>
+      <option value="pct">%</option><option value="amt">Rs.</option>
+    </select>
+    <input className={field} type="number" min={0} placeholder="0" value={value.value || ''} onChange={e => onChange({ ...value, value: Math.max(0, Number(e.target.value) || 0) })} />
+  </div>
+);
+
 interface Props { salesperson: Salesperson }
 
 export function QuotationWizard({ salesperson }: Props) {
@@ -79,6 +97,8 @@ export function QuotationWizard({ salesperson }: Props) {
   const [sameAddr, setSameAddr] = useState(true);
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [discount, setDiscount] = useState(emptyDiscount());
+  const [gstRate, setGstRate] = useState(18);
+  const [discMode, setDiscMode] = useState<'whole' | 'item'>('whole');
   const [freight, setFreight] = useState<{ mode: 'included' | 'extra'; amount: number }>({ mode: 'extra', amount: 0 });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [linkedQuotation, setLinkedQuotation] = useState('');
@@ -86,11 +106,6 @@ export function QuotationWizard({ salesperson }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState<{ number: string; docType: DocType } | null>(null);
-
-  // item picker
-  const [pickCat, setPickCat] = useState('');
-  const [pickItem, setPickItem] = useState('');
-  const [pickVariant, setPickVariant] = useState('');
 
   const [history, setHistory] = useState<QuotationData[]>([]);
   const [histLoading, setHistLoading] = useState(false);
@@ -135,7 +150,6 @@ export function QuotationWizard({ salesperson }: Props) {
     setBrand(b);
     setLines([]);
     setFreight({ mode: BRAND_RULES[b].freightDefault, amount: 0 });
-    setPickCat(''); setPickItem(''); setPickVariant('');
   };
 
   const brandRows = useMemo(() => (price?.rows || []).filter(r => r.brand === brand && r.active), [price, brand]);
@@ -173,27 +187,22 @@ export function QuotationWizard({ salesperson }: Props) {
   }, [brandRows]);
   const keyOf = (r: PriceRow) => rowKey(r.brand, r.category, r.item, r.variant);
 
-  const categoryOptions: SelectOption[] = mainCats.map(c => ({ value: c, label: c }));
-  const modelOptions: SelectOption[] = pickCat ? itemsIn(pickCat).map(i => {
-    const vs = variantsOf(pickCat, i);
-    const min = Math.min(...vs.map(v => v.price));
-    return { value: i, label: i, sub: `${vs.length} option${vs.length > 1 ? 's' : ''}`, right: `from ${fmt0(min)}` };
-  }) : [];
-  const variantOptions: SelectOption[] = pickItem ? variantsOf(pickCat, pickItem).map(v => ({
-    value: v.variant, label: v.variant || 'Standard', sub: v.notes || undefined, right: fmt0(v.price)
-  })) : [];
+  const groups: ItemGroup[] = useMemo(() => {
+    const out: ItemGroup[] = [];
+    brandRows.slice().sort((x, y) => x.order - y.order).filter(r => mainCats.includes(r.category)).forEach(r => {
+      const key = `${r.category}|${r.item}`;
+      let g = out.find(x => x.key === key);
+      if (!g) { g = { key, item: r.item, category: r.category, rows: [] }; out.push(g); }
+      g.rows.push(r);
+    });
+    return out;
+  }, [brandRows, categories]);
   const upholsteryOptions: SelectOption[] = brandRows.filter(r => r.category === 'Upholstery').sort((a, b) => a.order - b.order)
     .map(r => ({ value: keyOf(r), label: r.item, right: fmt0(r.price) + ' / seat' }));
   const addonSelectOptions: SelectOption[] = brandRows.filter(r => addonCats.includes(r.category) && r.category !== 'Upholstery').sort((a, b) => a.order - b.order)
     .map(r => ({ value: keyOf(r), label: r.variant && r.variant !== 'Per piece' ? `${r.item} (${r.variant})` : r.item, sub: r.category, right: fmt0(r.price) }));
 
-  const addPicked = () => {
-    const vs = variantsOf(pickCat, pickItem);
-    const row = vs.find(v => v.variant === pickVariant) || (vs.length === 1 ? vs[0] : undefined);
-    if (!row) return;
-    setLines(l => [...l, rowToLine(row)]);
-    setPickItem(''); setPickVariant('');
-  };
+  const addPicked = (row: PriceRow) => setLines(l => [...l, rowToLine(row)]);
 
   const updateLine = (id: string, patch: Partial<QuoteLine>) => setLines(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l));
   const updateOption = (lid: string, oid: string, patch: Partial<LineOption>) =>
@@ -203,12 +212,9 @@ export function QuotationWizard({ salesperson }: Props) {
     if (!r) return;
     setLines(ls => ls.map(l => l.id === lid ? { ...l, options: [...l.options, rowToOption(r)] } : l));
   };
-  const addCustomOption = (lid: string) =>
-    setLines(ls => ls.map(l => l.id === lid ? { ...l, options: [...l.options, { id: uid(), brand, category: 'Custom', item: '', variant: '', unitPrice: 0, listPrice: 0, qty: 1, custom: true }] } : l));
-  const addCustomLine = () =>
     setLines(ls => [...ls, { id: uid(), brand, category: 'Custom', item: '', variant: '', qty: 1, unitPrice: 0, listPrice: 0, custom: true, options: [], discount: emptyDiscount() }]);
 
-  const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight }), [brand, docType, lines, discount, freight]);
+  const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight, gstRate }), [brand, docType, lines, discount, freight, gstRate]);
   const totals = useMemo(() => calcTotals(payload), [payload]);
 
   const stepError = (s: number): string => {
@@ -218,9 +224,10 @@ export function QuotationWizard({ salesperson }: Props) {
     }
     if (s === 2) {
       if (!lines.length) return 'Add at least one item.';
-      const bad = lines.find(l => !l.item.trim() || l.qty < 1);
-      if (bad) return 'Every item needs a name and a quantity of at least 1.';
+      const bad = lines.find(l => l.qty < 1);
+      if (bad) return 'Every item needs a quantity of at least 1.';
     }
+    if (s === 3 && !(gstRate >= 0 && gstRate <= 28)) return 'GST % must be between 0 and 28.';
     if (s === 3 && freight.mode === 'extra' && !(freight.amount > 0)) return 'Enter the freight amount, or choose "Included".';
     return '';
   };
@@ -231,7 +238,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
     setBilling(''); setShipping(''); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
-    setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 });
+    setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole');
   };
 
   const meta = (number: string): PdfMeta => ({
@@ -292,7 +299,7 @@ export function QuotationWizard({ salesperson }: Props) {
     try { const j = JSON.parse(r.productsJson); if (j && j.v === 2) p = j; } catch { /* legacy record */ }
     if (!p) { window.alert('This record was made with the old generator and cannot be reopened here.'); return; }
     const b = p.brand;
-    setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight);
+    setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0) ? 'item' : 'whole');
     setClientName(r.clientName); setCompany(''); setMobile(String(r.mobileNumber || '')); setEmail(r.emailId || '');
     setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(!r.shippingAddress || r.shippingAddress === r.billingAddress);
     setAttachments([]); setSaved(null); setError('');
@@ -332,7 +339,6 @@ export function QuotationWizard({ salesperson }: Props) {
     </div>
   );
 
-  const canAddPicked = !!pickItem && (variantsOf(pickCat, pickItem).length === 1 || !!pickVariant);
   const variantLabel = (v: string) => (v && v !== 'Standard' ? v : '');
 
   return (
@@ -456,120 +462,120 @@ export function QuotationWizard({ salesperson }: Props) {
 
               {step === 2 && (
                 <div className="space-y-5">
-                  <div className={`${card} space-y-4`}>
-                    <div className="grid sm:grid-cols-3 gap-4">
-                      <SearchSelect label="Category" title="Category" value={pickCat} options={categoryOptions}
-                        onChange={v => { setPickCat(v); setPickItem(''); setPickVariant(''); }} />
-                      <SearchSelect label="Model" title="Model" value={pickItem} options={modelOptions} disabled={!pickCat}
-                        onChange={v => { setPickItem(v); const vs = variantsOf(pickCat, v); setPickVariant(vs.length === 1 ? vs[0].variant : ''); }} />
-                      <SearchSelect label="Seats and type" title="Seats and type" value={pickVariant} options={variantOptions} disabled={!pickItem}
-                        placeholder={pickItem ? 'Select' : 'Pick a model first'} onChange={setPickVariant} />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <button className={btnPrimary} disabled={!canAddPicked} onClick={addPicked}><Plus size={16} /> Add item</button>
-                      {rule.customisation && <button className="text-xs font-semibold underline text-slate-600" onClick={addCustomLine}>Item not in the list? Add a custom item</button>}
-                    </div>
-                  </div>
+                  <ItemPicker groups={groups} title="Choose a model" variantTitle="Choose seats and type" buttonLabel={lines.length ? 'Add another item' : 'Add item'} onPick={addPicked} />
 
-                  {!lines.length && <p className="text-sm text-slate-500 text-center py-6">No items added yet.</p>}
+                  {!lines.length && <p className="text-sm text-slate-500 text-center py-6">Tap "Add item", then pick the model and its seats and type. The price comes from the price list.</p>}
 
                   {lines.map((l, idx) => {
                     const lt = totals.lines[idx];
                     const upholsteries = l.options.filter(o => o.category === 'Upholstery');
                     const addons = l.options.filter(o => o.category !== 'Upholstery');
-                    const optionRow = (o: LineOption, qtyLabel: string) => (
-                      <div key={o.id} className="grid grid-cols-12 gap-2 items-center py-2 border-t border-slate-100">
-                        <div className="col-span-12 sm:col-span-5 text-sm font-medium">
-                          {o.custom
-                            ? <input className={field} placeholder="Name" value={o.item} onChange={e => updateOption(l.id, o.id, { item: e.target.value })} />
-                            : <>{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? <span className="text-slate-500 font-normal"> · {o.variant}</span> : null}</>}
+                    const optionRow = (o: LineOption) => (
+                      <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 border-t border-slate-100">
+                        <div className="min-w-0 text-sm">
+                          <div className="font-medium">{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? <span className="text-slate-500 font-normal"> · {o.variant}</span> : null}</div>
+                          <div className="text-xs text-slate-500">{fmt0(o.unitPrice)} each</div>
                         </div>
-                        <div className="col-span-4 sm:col-span-2">
-                          <span className="block text-[10px] uppercase tracking-wider text-slate-400 mb-0.5">{qtyLabel}</span>
-                          <input className={`${field} !h-10`} type="number" min={1} value={o.qty} onChange={e => updateOption(l.id, o.id, { qty: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
+                        <div className="flex items-center gap-3 shrink-0">
+                          <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
+                          <button className="text-red-600" aria-label="Remove" onClick={() => setLines(ls => ls.map(x => x.id === l.id ? { ...x, options: x.options.filter(y => y.id !== o.id) } : x))}><Trash2 size={17} /></button>
                         </div>
-                        <div className="col-span-6 sm:col-span-4">
-                          <span className="block text-[10px] uppercase tracking-wider text-slate-400 mb-0.5">Price each</span>
-                          <input className={`${field} !h-10`} type="number" min={0} value={o.unitPrice} onChange={e => updateOption(l.id, o.id, { unitPrice: Math.max(0, Number(e.target.value) || 0) })} />
-                        </div>
-                        <button className="col-span-2 sm:col-span-1 flex justify-end text-red-600 self-end pb-2.5" aria-label="Remove"
-                          onClick={() => setLines(ls => ls.map(x => x.id === l.id ? { ...x, options: x.options.filter(y => y.id !== o.id) } : x))}><Trash2 size={17} /></button>
                       </div>
                     );
                     return (
                       <div key={l.id} className={card}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item {idx + 1}{l.custom ? ' · custom' : ''}</div>
-                            {l.custom
-                              ? <input className={`${field} mt-1`} placeholder="Item name" value={l.item} onChange={e => updateLine(l.id, { item: e.target.value })} />
-                              : <div className="text-base font-bold mt-0.5">{l.item}</div>}
-                            {!l.custom && variantLabel(l.variant) && <div className="text-sm text-slate-500">{l.variant}</div>}
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item {idx + 1}</div>
+                            <div className="text-base font-bold mt-0.5">{l.item}</div>
+                            {variantLabel(l.variant) && <div className="text-sm text-slate-500">{l.variant}</div>}
                           </div>
                           <button className="text-red-600 p-1" aria-label="Remove item" onClick={() => setLines(ls => ls.filter(x => x.id !== l.id))}><Trash2 size={19} /></button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mt-4">
-                          <div><label className={label}>Quantity</label>
-                            <input className={field} type="number" min={1} value={l.qty} onChange={e => updateLine(l.id, { qty: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} /></div>
-                          <div><label className={label}>Price each (incl. GST)</label>
-                            <input className={field} type="number" min={0} value={l.unitPrice} onChange={e => updateLine(l.id, { unitPrice: Math.max(0, Number(e.target.value) || 0) })} />
-                            {lineIsEdited(l) && <div className="text-[11px] text-amber-700 mt-1">List price {fmt0(l.listPrice)}</div>}</div>
+                        <div className="flex items-center justify-between mt-4">
+                          <div><div className={label}>Price each (incl. GST)</div><div className="text-sm font-bold">{formatINR(l.unitPrice)}</div></div>
+                          <div><div className={label}>Quantity</div><Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} /></div>
                         </div>
 
                         {rule.customisation && (
                           <div className="mt-5 space-y-5">
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">Upholstery</div>
-                              {upholsteries.map(o => optionRow(o, 'Seats'))}
-                              <div className="mt-2">
-                                <SearchSelect title="Add upholstery" value="" options={upholsteryOptions} placeholder="+ Add upholstery (leather, fabric…)" onChange={v => addOption(l.id, v)} />
-                              </div>
+                              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Upholstery <span className="font-normal normal-case tracking-normal text-slate-400">· seats per piece</span></div>
+                              {upholsteries.map(optionRow)}
+                              <div className="mt-2"><SearchSelect title="Add upholstery" value="" options={upholsteryOptions} placeholder="+ Add upholstery (leather, fabric…)" onChange={v => addOption(l.id, v)} /></div>
                             </div>
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">Add-ons</div>
-                              {addons.map(o => optionRow(o, 'Qty'))}
-                              <div className="mt-2 flex flex-col sm:flex-row gap-3 sm:items-center">
-                                <div className="flex-1"><SearchSelect title="Add an add-on" value="" options={addonSelectOptions} placeholder="+ Add add-on (motor, switch, veneer…)" onChange={v => addOption(l.id, v)} /></div>
-                                <button className="text-xs font-semibold underline text-slate-600 text-left" onClick={() => addCustomOption(l.id)}>Custom add-on</button>
-                              </div>
+                              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Add-ons</div>
+                              {addons.map(optionRow)}
+                              <div className="mt-2"><SearchSelect title="Add an add-on" value="" options={addonSelectOptions} placeholder="+ Add add-on (motor, switch, veneer…)" onChange={v => addOption(l.id, v)} /></div>
                             </div>
                           </div>
                         )}
 
                         <div className="mt-5 pt-4 border-t border-slate-100 flex justify-between items-center">
                           <span className="text-xs uppercase tracking-wider text-slate-500 font-bold">Item total</span>
-                          <span className="text-base font-bold">{formatINR(lt.net)}</span>
+                          <span className="text-base font-bold">{formatINR(lt.gross)}</span>
                         </div>
                       </div>
                     );
                   })}
+
+                  {lines.length > 0 && (
+                    <ItemPicker groups={groups} title="Choose a model" variantTitle="Choose seats and type" buttonLabel="Add another item" onPick={addPicked}
+                      className="inline-flex items-center justify-center gap-2 h-12 w-full rounded-xl border border-slate-200 bg-white text-slate-800 px-6 text-sm font-bold hover:border-slate-400" />
+                  )}
                 </div>
               )}
 
               {step === 3 && (
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="space-y-5">
                   <div className={card}>
                     <h3 className="font-bold mb-3 text-sm">Discount</h3>
-                    <div className="flex gap-2">
-                      <select className="h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={discount.mode} onChange={e => setDiscount({ ...discount, mode: e.target.value as 'pct' | 'amt' })}>
-                        <option value="pct">%</option><option value="amt">Rs.</option>
-                      </select>
-                      <input className={field} type="number" min={0} placeholder="0" value={discount.value || ''} onChange={e => setDiscount({ ...discount, value: Math.max(0, Number(e.target.value) || 0) })} />
+                    <div className="grid grid-cols-2 border border-slate-200 rounded-xl overflow-hidden mb-4 text-sm font-bold">
+                      {([['whole', 'Whole quotation'], ['item', 'Each item']] as const).map(([k, t]) => (
+                        <button key={k} type="button" onClick={() => {
+                          if (k === discMode) return;
+                          setDiscMode(k);
+                          if (k === 'whole') setLines(ls => ls.map(x => ({ ...x, discount: emptyDiscount() })));
+                          else setDiscount(emptyDiscount());
+                        }} className={`h-11 ${discMode === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>{t}</button>
+                      ))}
                     </div>
-                    <p className="text-xs text-slate-500 mt-3">Applied on the total of all items.</p>
-                  </div>
-                  <div className={card}>
-                    <h3 className="font-bold mb-3 text-sm">Freight</h3>
-                    <div className="flex gap-5 mb-4 text-sm">
-                      <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'included'} onChange={() => setFreight({ mode: 'included', amount: 0 })} /> Included</label>
-                      <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'extra'} onChange={() => setFreight({ ...freight, mode: 'extra' })} /> Extra</label>
-                    </div>
-                    {freight.mode === 'extra' && (
-                      <div><label className={label}>Freight amount (Rs.)</label>
-                        <input className={field} type="number" min={0} value={freight.amount || ''} onChange={e => setFreight({ mode: 'extra', amount: Math.max(0, Number(e.target.value) || 0) })} /></div>
+                    {discMode === 'whole' ? (
+                      <DiscountInput value={discount} onChange={setDiscount} />
+                    ) : (
+                      <div className="space-y-4">
+                        {lines.map((l, i) => (
+                          <div key={l.id}>
+                            <div className="text-sm font-semibold mb-1.5">{i + 1}. {l.item}{variantLabel(l.variant) ? ` · ${l.variant}` : ''} <span className="text-slate-400 font-normal">({formatINR(totals.lines[i].gross)})</span></div>
+                            <DiscountInput value={l.discount} onChange={d => updateLine(l.id, { discount: d })} />
+                          </div>
+                        ))}
+                      </div>
                     )}
-                    <p className="text-xs text-slate-500 mt-3">{rule.freightNote}</p>
+                    <p className="text-xs text-slate-500 mt-3">Prices come from the price list and cannot be edited. Use the discount instead.</p>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <div className={card}>
+                      <h3 className="font-bold mb-3 text-sm">GST</h3>
+                      <label className={label}>GST %</label>
+                      <input className={field} type="number" min={0} max={28} step="0.5" value={gstRate} onChange={e => setGstRate(Number(e.target.value))} />
+                      <p className="text-xs text-slate-500 mt-3">Prices already include GST. This sets how much of the total is shown as GST. Default is 18%.</p>
+                    </div>
+                    <div className={card}>
+                      <h3 className="font-bold mb-3 text-sm">Freight</h3>
+                      <div className="flex gap-5 mb-4 text-sm">
+                        <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'included'} onChange={() => setFreight({ mode: 'included', amount: 0 })} /> Included</label>
+                        <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'extra'} onChange={() => setFreight({ ...freight, mode: 'extra' })} /> Extra</label>
+                      </div>
+                      {freight.mode === 'extra' && (
+                        <div><label className={label}>Freight amount (Rs.)</label>
+                          <input className={field} type="number" min={0} value={freight.amount || ''} onChange={e => setFreight({ mode: 'extra', amount: Math.max(0, Number(e.target.value) || 0) })} /></div>
+                      )}
+                      <p className="text-xs text-slate-500 mt-3">{rule.freightNote}</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -588,13 +594,14 @@ export function QuotationWizard({ salesperson }: Props) {
                           <div className="font-semibold">{l.qty} × {l.item}{variantLabel(l.variant) ? ` · ${l.variant}` : ''}</div>
                           {l.options.length > 0 && <div className="text-xs text-slate-500 mt-0.5">{l.options.map(o => o.item).join(', ')}</div>}
                         </div>
-                        <div className="font-semibold whitespace-nowrap">{formatINR(totals.lines[i].net)}</div>
+                        <div className="text-right whitespace-nowrap"><div className="font-semibold">{formatINR(totals.lines[i].net)}</div>{totals.lines[i].discount > 0 && <div className="text-xs text-slate-500">after discount - {formatINR(totals.lines[i].discount)}</div>}</div>
                       </div>
                     ))}
                     <div className="p-5 text-sm space-y-1.5 bg-slate-50">
                       <div className="flex justify-between"><span>Sub total</span><span>{formatINR(totals.subtotal)}</span></div>
                       {totals.overallDiscount > 0 && <div className="flex justify-between"><span>Discount</span><span>- {formatINR(totals.overallDiscount)}</span></div>}
-                      <div className="flex justify-between text-slate-500"><span>GST included</span><span>{formatINR(totals.gstIncluded)}</span></div>
+                      <div className="flex justify-between"><span>Taxable value (excl. GST)</span><span>{formatINR(totals.taxableExGst)}</span></div>
+                      <div className="flex justify-between text-slate-500"><span>GST @ {totals.gstRate}% (included)</span><span>{formatINR(totals.gstIncluded)}</span></div>
                       <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
                       <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200"><span>Grand total</span><span>{formatINR(totals.grandTotal)}</span></div>
                     </div>

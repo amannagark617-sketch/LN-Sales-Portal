@@ -181,7 +181,8 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   };
   row('Sub Total', `Rs. ${money(t.subtotal)}`);
   if (t.overallDiscount > 0) row('Overall Discount', `- Rs. ${money(t.overallDiscount)}`);
-  row('GST @ 18% (included)', `Rs. ${money(t.gstIncluded)}`);
+  row('Taxable Value (excl. GST)', `Rs. ${money(t.taxableExGst)}`);
+  row(`GST @ ${t.gstRate}% (included)`, `Rs. ${money(t.gstIncluded)}`);
   if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
   else row('Freight', 'Included');
   doc.setDrawColor(GOLD); doc.setLineWidth(0.5); doc.line(100, y - 3, W - 15, y - 3);

@@ -57,17 +57,19 @@ export function calcLine(line: QuoteLine): LineTotals {
   return { gross, discount, net: r2(gross - discount) };
 }
 
-export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight'>): Totals {
+export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight'> & { gstRate?: number }): Totals {
   const lines = p.lines.map(calcLine);
   const subtotal = r2(lines.reduce((s, l) => s + l.net, 0));
   const overallDiscount = discountAmount(subtotal, p.discount);
   const taxable = r2(subtotal - overallDiscount);
   // All list prices are GST-inclusive, so GST is the portion already inside the discounted value.
-  const gstIncluded = r2(taxable / (1 + GST_RATE) * GST_RATE);
+  const rate = Number.isFinite(Number(p.gstRate)) && p.gstRate !== undefined ? Math.max(0, Number(p.gstRate)) / 100 : GST_RATE;
+  const gstIncluded = r2(taxable / (1 + rate) * rate);
+  const taxableExGst = r2(taxable - gstIncluded);
   const freightExtra = p.freight.mode === 'extra' ? r2(Math.max(0, num(p.freight.amount))) : 0;
   const grandTotal = r2(taxable + freightExtra);
   const hasAnyDiscount = overallDiscount > 0 || lines.some(l => l.discount > 0);
-  return { lines, subtotal, overallDiscount, taxable, gstIncluded, freightExtra, grandTotal, hasAnyDiscount };
+  return { lines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, grandTotal, hasAnyDiscount };
 }
 
 export function lineIsEdited(line: QuoteLine): boolean {
@@ -104,26 +106,31 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
     if (l.brand !== p.brand) problems.push(`${label} belongs to ${l.brand}. ${p.brand} and ${l.brand} cannot be in the same quotation.`);
     if (num(l.qty) < 1) problems.push(`${label}: quantity must be at least 1.`);
     if (num(l.unitPrice) < 0) problems.push(`${label}: price cannot be negative.`);
-    if (!l.custom) {
+    if (l.custom) {
+      problems.push(`${label}: only items from the price list can be added.`);
+    } else {
       const row = map.get(rowKey(l.brand, l.category, l.item, l.variant));
       if (!row) problems.push(`${label} is not in the ${l.brand} price list.`);
       else if (r2(row.price) !== r2(num(l.listPrice))) problems.push(`${label}: the price list has changed since it was picked. Please re-select it.`);
-    } else if (!rule.customisation) {
-      problems.push(`${label}: custom items are not allowed for ${p.brand}.`);
+      if (r2(num(l.unitPrice)) !== r2(num(l.listPrice))) problems.push(`${label}: the price cannot be changed. Use a discount instead.`);
     }
     if (l.options.length && !rule.customisation) problems.push(`${label}: ${p.brand} has no customisation.`);
     l.options.forEach(o => {
       const oLabel = `${label} / ${o.item || 'option'}`;
       if (o.brand !== p.brand) problems.push(`${oLabel} belongs to ${o.brand}.`);
       if (num(o.qty) <= 0) problems.push(`${oLabel}: quantity must be above zero.`);
-      if (!o.custom) {
+      if (o.custom) {
+        problems.push(`${oLabel}: only items from the price list can be added.`);
+      } else {
         const row = map.get(rowKey(o.brand, o.category, o.item, o.variant));
         if (!row) problems.push(`${oLabel} is not in the ${o.brand} price list.`);
         else if (r2(row.price) !== r2(num(o.listPrice))) problems.push(`${oLabel}: the price list has changed since it was picked.`);
+        if (r2(num(o.unitPrice)) !== r2(num(o.listPrice))) problems.push(`${oLabel}: the price cannot be changed.`);
       }
     });
   });
 
+  if (p.gstRate !== undefined && !(Number(p.gstRate) >= 0 && Number(p.gstRate) <= 28)) problems.push('GST % must be between 0 and 28.');
   if (p.freight.mode === 'extra' && !(num(p.freight.amount) > 0)) problems.push('Enter the freight amount, or choose "Included".');
   return problems;
 }

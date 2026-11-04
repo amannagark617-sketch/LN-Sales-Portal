@@ -74,6 +74,8 @@ export interface QuotePayload {
   lines: QuoteLine[];
   discount: Discount;
   freight: Freight;
+  /** GST % already contained in the prices; defaults to 18 */
+  gstRate?: number;
 }
 
 export interface LineTotals {
@@ -87,6 +89,9 @@ export interface Totals {
   subtotal: number;
   overallDiscount: number;
   taxable: number;
+  /** value excluding GST */
+  taxableExGst: number;
+  gstRate: number;
   gstIncluded: number;
   freightExtra: number;
   grandTotal: number;
