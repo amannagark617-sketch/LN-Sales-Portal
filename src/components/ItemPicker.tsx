@@ -43,7 +43,9 @@ export function ItemPicker({ groups, onPick, buttonLabel, title, variantTitle = 
     return () => { clearTimeout(t); window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [open]);
 
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  // "2 seater" finds "Two Seater", "1 seater" finds "Single Seater"
+  const SYN: Record<string, string> = { '1': 'single', one: 'single', '2': 'two', '3': 'three', '1s': 'single', '2s': 'two', '3s': 'three' };
+  const words = q.toLowerCase().replace(/(\d)\s*-?\s*(seater|seat|s)\b/g, '$1 seater').split(/\s+/).filter(Boolean).map(w => SYN[w] || w);
 
   const modelList = useMemo(() => {
     if (!words.length) return groups;

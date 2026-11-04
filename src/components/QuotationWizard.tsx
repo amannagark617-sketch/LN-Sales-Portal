@@ -212,7 +212,6 @@ export function QuotationWizard({ salesperson }: Props) {
     if (!r) return;
     setLines(ls => ls.map(l => l.id === lid ? { ...l, options: [...l.options, rowToOption(r)] } : l));
   };
-    setLines(ls => [...ls, { id: uid(), brand, category: 'Custom', item: '', variant: '', qty: 1, unitPrice: 0, listPrice: 0, custom: true, options: [], discount: emptyDiscount() }]);
 
   const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight, gstRate }), [brand, docType, lines, discount, freight, gstRate]);
   const totals = useMemo(() => calcTotals(payload), [payload]);
