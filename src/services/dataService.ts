@@ -130,6 +130,10 @@ export interface QuotationData {
   pdfUrl?: string;
   productsJson: string; // contains serialized list of products
   timestamp?: string;
+  docType?: 'Quotation' | 'PI';
+  linkedQuotation?: string;
+  convertedTo?: string;
+  status?: string;
 }
 
 export const fetchQuotationOptions = async (): Promise<QuotationOption[]> => {
@@ -195,3 +199,47 @@ export const uploadPDFBackground = async (payload: { quotationNumber: string; cl
   return await response.json();
 };
 
+
+// ---------- Quotation wizard (v2) ----------
+import type { PriceListPayload, Brand, DocType, QuotePayload, Totals } from '../quotation/types';
+
+export const fetchPriceList = async (refresh = false): Promise<PriceListPayload> => {
+  const response = await fetch(`/api/price-list${refresh ? '?refresh=1' : ''}`, { headers: getAuthHeaders() });
+  if (!response.ok) {
+    let msg = 'Could not load the price list';
+    try { const j = await response.json(); if (j?.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
+  }
+  return await response.json();
+};
+
+export const fetchNextNumber = async (brand: Brand, docType: DocType): Promise<{ quotationNumber: string }> => {
+  const response = await fetch(`/api/next-quotation-sequence?brand=${encodeURIComponent(brand)}&docType=${docType}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Could not get the next number');
+  return await response.json();
+};
+
+export interface SaveQuotationBody {
+  quotationNumber: string;
+  linkedQuotation?: string;
+  date: string;
+  clientName: string;
+  mobileNumber: string;
+  emailId?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  payload: QuotePayload;
+  pdfBase64?: string;
+}
+
+export const saveQuotation = async (body: SaveQuotationBody): Promise<{ status: string; quotationNumber: string; totals: Totals }> => {
+  const response = await fetch('/api/quotations', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body) });
+  if (!response.ok) {
+    let msg = 'Saving failed';
+    try { const j = await response.json(); if (j?.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
+  }
+  return await response.json();
+};

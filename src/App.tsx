@@ -12,7 +12,7 @@ import { NoSaleForm } from './components/NoSaleForm';
 import { Dashboard } from './components/Dashboard';
 import { LogOut, LayoutDashboard, FileText, Ban, History } from 'lucide-react';
 import { MySubmissions } from './components/MySubmissions';
-import { QuotationGenerator } from './components/QuotationGenerator';
+import { QuotationWizard } from './components/QuotationWizard';
 import { LoadingScreen } from './components/LoadingScreen';
 import { NotificationProvider, useNotification } from './components/Notification';
 
@@ -360,7 +360,7 @@ function MainContent() {
         )}
         {view === 'submissions' && <MySubmissions data={mySubmissionsData} />}
         {view === 'quotation' && user && (
-          <QuotationGenerator salesperson={user} />
+          <QuotationWizard salesperson={user} />
         )}
         
         {(view === 'sale' || view === 'noSale') && (
