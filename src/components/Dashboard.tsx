@@ -123,16 +123,8 @@ export const Dashboard = ({
   }, [regionalSalespersons, opfData, user]);
 
   const effectiveShowroom = useMemo(() => {
-    if (selectedShowroom !== 'all') return selectedShowroom;
-    if (availableShowrooms.length === 1) {
-      return availableShowrooms[0];
-    }
-    const userShowroom = (user?.showroom || '').trim();
-    if (user?.isManager && userShowroom && normalizeRoom(userShowroom) !== 'all' && normalizeRoom(userShowroom) !== 'all regions' && availableShowrooms.some(r => isMatchingRoom(r, userShowroom))) {
-      return userShowroom;
-    }
-    return 'all';
-  }, [selectedShowroom, availableShowrooms, user]);
+    return selectedShowroom;
+  }, [selectedShowroom]);
 
   const getSalespersonTargetsForPeriod = useCallback((sName: string) => {
     const sNameLower = sName.trim().toLowerCase();
@@ -187,20 +179,6 @@ export const Dashboard = ({
     });
   }, [regionalSalespersons, effectiveShowroom, getSalespersonTargetsForPeriod, getSalespersonSalesForPeriod]);
 
-  const activeSalespersonNamesLower = useMemo(() => {
-    if (!user) return [];
-    if (!user.isManager) {
-      return [user.name.trim().toLowerCase()];
-    }
-
-    if (selectedSalesperson !== 'all') {
-      return [selectedSalesperson.trim().toLowerCase()];
-    }
-
-    // Otherwise include all salespeople in the table's active set (which respects the showroom filter)
-    return tableSalespersons.map(s => s.name.trim().toLowerCase());
-  }, [tableSalespersons, selectedSalesperson, user]);
-
   const locationsDisplay = useMemo(() => {
     if (!user) return '';
     if (!user.isManager) return user.showroom || user.region;
@@ -216,22 +194,50 @@ export const Dashboard = ({
   }, [regionalSalespersons, user]);
 
   const localOpfData = useMemo(() => {
-    const activeNames = new Set(activeSalespersonNamesLower);
+    if (!user) return [];
+    if (!user.isManager) {
+      const myName = user.name.trim().toLowerCase();
+      return opfData.filter(d => d.salesperson && d.salesperson.trim().toLowerCase() === myName);
+    }
+
+    if (selectedSalesperson !== 'all') {
+      const selName = selectedSalesperson.trim().toLowerCase();
+      return opfData.filter(d => {
+        if (!d.salesperson || d.salesperson.trim().toLowerCase() !== selName) return false;
+        if (effectiveShowroom !== 'all') {
+          if (!isMatchingRoom(d.showroom || d.region, effectiveShowroom)) return false;
+        }
+        return true;
+      });
+    }
+
+    if (effectiveShowroom === 'all') {
+      return opfData;
+    }
+
     return opfData.filter(d => {
-      if (!d.salesperson || !activeNames.has(d.salesperson.trim().toLowerCase())) return false;
-      if (effectiveShowroom !== 'all') {
-        if (!isMatchingRoom(d.showroom || d.region, effectiveShowroom)) return false;
-      }
-      return true;
+      return isMatchingRoom(d.showroom || d.region, effectiveShowroom);
     });
-  }, [opfData, activeSalespersonNamesLower, effectiveShowroom]);
+  }, [opfData, selectedSalesperson, effectiveShowroom, user]);
 
   const localTargets = useMemo(() => {
-    const activeNames = new Set(activeSalespersonNamesLower);
-    return targets.filter(t => {
-      if (!t.salesperson || !activeNames.has(t.salesperson.trim().toLowerCase())) return false;
-      if (effectiveShowroom === 'all') return true;
+    if (!user) return [];
+    if (!user.isManager) {
+      const myName = user.name.trim().toLowerCase();
+      return targets.filter(t => t.salesperson && t.salesperson.trim().toLowerCase() === myName);
+    }
 
+    if (selectedSalesperson !== 'all') {
+      const selName = selectedSalesperson.trim().toLowerCase();
+      return targets.filter(t => t.salesperson && t.salesperson.trim().toLowerCase() === selName);
+    }
+
+    if (effectiveShowroom === 'all') {
+      return targets;
+    }
+
+    return targets.filter(t => {
+      if (!t.salesperson) return false;
       if (t.showroom) {
         return isMatchingRoom(t.showroom, effectiveShowroom);
       }
@@ -239,7 +245,7 @@ export const Dashboard = ({
       const profile = regionalSalespersons.find(s => s.name.trim().toLowerCase() === t.salesperson.trim().toLowerCase());
       return profile ? isMatchingRoom(profile.showroom, effectiveShowroom) : false;
     });
-  }, [targets, activeSalespersonNamesLower, effectiveShowroom, regionalSalespersons]);
+  }, [targets, selectedSalesperson, effectiveShowroom, user, regionalSalespersons]);
 
   const handleShowroomChange = (val: string) => {
     setSelectedShowroom(val);
