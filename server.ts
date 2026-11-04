@@ -1,6 +1,10 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import {
+  calcTotals, validatePayload, nextNumber, numberToWords, payloadHasEditedPrices, docPrefix
+} from "./src/quotation/pricing";
+import type { Brand, DocType, PriceRow, QuotePayload, TermRow } from "./src/quotation/types";
 
 interface CacheEntry<T> {
   data: T;
@@ -482,40 +486,47 @@ async function getCachedBankDetails(): Promise<any[]> {
   return data;
 }
 
+// Strict reader: throws if the sheet cannot be read, so numbering never restarts from an empty list.
+async function getQuotationHistoryStrict(): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}1236899347`);
+  if (!response.ok) throw new Error('Could not read the quotation history sheet.');
+  const csvText = await response.text();
+  const rows = parseQuotedCSV(csvText);
+  if (rows.length <= 1) return [];
+  const clean = (val: string | undefined) => (val ? val.trim() : '');
+  const toNum = (val: string | undefined) => Number(String(val || '').replace(/[^0-9.\-]/g, '')) || 0;
+
+  return rows.slice(1).map(values => ({
+    date: clean(values[0]),
+    quotationNumber: clean(values[1]),
+    opfCode: clean(values[2]),
+    salespersonId: clean(values[3]),
+    salespersonName: clean(values[4]),
+    brandName: clean(values[5]),
+    clientName: clean(values[6]),
+    mobileNumber: clean(values[7]),
+    emailId: clean(values[8]),
+    billingAddress: clean(values[9]),
+    shippingAddress: clean(values[10]),
+    subtotal: toNum(values[11]),
+    gstIncluded: toNum(values[12]),
+    freight: toNum(values[13]),
+    grandTotal: toNum(values[14]),
+    amountInWords: clean(values[15]),
+    docUrl: clean(values[16]),
+    pdfUrl: clean(values[17]),
+    productsJson: clean(values[18]),
+    timestamp: clean(values[19]),
+    // Columns added with the quotation -> PI flow. Older rows leave them empty.
+    docType: clean(values[20]).toUpperCase() === 'PI' ? 'PI' : 'Quotation',
+    linkedQuotation: clean(values[21]),
+    status: clean(values[22])
+  }));
+}
+
 async function getQuotationHistory(): Promise<any[]> {
   try {
-    const response = await fetch(`${BASE_URL}1236899347`);
-    if (!response.ok) return [];
-    const csvText = await response.text();
-    const lines = csvText.split(/\r?\n/);
-    if (lines.length <= 1) return [];
-    
-    return lines.slice(1).filter(line => line.trim() !== '').map(line => {
-      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-      const clean = (val: string | undefined) => val ? val.replace(/^"|"$/g, '').trim() : '';
-      return {
-        date: clean(values[0]),
-        quotationNumber: clean(values[1]),
-        opfCode: clean(values[2]),
-        salespersonId: clean(values[3]),
-        salespersonName: clean(values[4]),
-        brandName: clean(values[5]),
-        clientName: clean(values[6]),
-        mobileNumber: clean(values[7]),
-        emailId: clean(values[8]),
-        billingAddress: clean(values[9]),
-        shippingAddress: clean(values[10]),
-        subtotal: Number(values[11]) || 0,
-        gstIncluded: Number(values[12]) || 0,
-        freight: Number(values[13]) || 0,
-        grandTotal: Number(values[14]) || 0,
-        amountInWords: clean(values[15]),
-        docUrl: clean(values[16]),
-        pdfUrl: clean(values[17]),
-        productsJson: clean(values[18]),
-        timestamp: clean(values[19]) || ''
-      };
-    });
+    return await getQuotationHistoryStrict();
   } catch (err) {
     console.error('getQuotationHistory error:', err);
     return [];
@@ -530,6 +541,97 @@ async function getCachedQuotationHistory(): Promise<any[]> {
   const data = await getQuotationHistory();
   quotationHistoryCache = { data, timestamp: now };
   return data;
+}
+
+// ---------- Price list + terms (maintained in the Google Sheet tabs "PriceList" and "Terms") ----------
+
+const SHEET_ID = '1-K_S1HXjca8dy0Sbl2qN7ts_e_YnKg5fBVSmaHB8kgU';
+const PRICE_TTL = 60000; // price list changes rarely; 60s keeps sheet downloads and CPU low
+
+let priceListCache: { data: { rows: PriceRow[]; terms: TermRow[] }; timestamp: number } | null = null;
+
+async function fetchSheetByName(name: string, mustHave: string[]): Promise<string[][]> {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not read the "${name}" tab.`);
+  const rows = parseQuotedCSV(await response.text());
+  const header = (rows[0] || []).map(h => h.trim().toLowerCase());
+  // Google silently returns the first tab when the name is wrong, so check the header.
+  if (!mustHave.every(h => header.includes(h.toLowerCase()))) {
+    throw new Error(`The "${name}" tab is missing or its header row is wrong (needs: ${mustHave.join(', ')}).`);
+  }
+  return rows;
+}
+
+const BRAND_NAMES: Brand[] = ['Little Nap', 'La-Z-Boy', 'Smart Comfort'];
+const asBrand = (s: string): Brand | null => {
+  const t = s.trim().toLowerCase();
+  return BRAND_NAMES.find(b => b.toLowerCase() === t) || null;
+};
+const isYes = (s: string | undefined) => !['no', 'n', 'false', '0', 'inactive'].includes((s || 'yes').trim().toLowerCase());
+
+async function loadPriceList(): Promise<{ rows: PriceRow[]; terms: TermRow[] }> {
+  const [priceRaw, termsRaw] = await Promise.all([
+    fetchSheetByName('PriceList', ['Brand', 'Category', 'Item', 'Variant', 'Price']),
+    fetchSheetByName('Terms', ['Brand', 'Text']).catch(() => [] as string[][])
+  ]);
+
+  const ph = priceRaw[0].map(h => h.trim().toLowerCase());
+  const col = (name: string) => ph.indexOf(name);
+  const rows: PriceRow[] = [];
+  priceRaw.slice(1).forEach((r, i) => {
+    const brand = asBrand(r[col('brand')] || '');
+    const item = (r[col('item')] || '').trim();
+    if (!brand || !item) return;
+    const price = Number(String(r[col('price')] || '').replace(/[^0-9.]/g, ''));
+    if (!Number.isFinite(price)) return;
+    const active = isYes(r[col('active')]);
+    if (!active) return;
+    rows.push({
+      brand,
+      category: (r[col('category')] || '').trim(),
+      item,
+      variant: (r[col('variant')] || '').trim(),
+      price,
+      notes: (r[col('notes')] || '').trim(),
+      active,
+      order: Number(r[col('order')]) || i + 1
+    });
+  });
+
+  const terms: TermRow[] = [];
+  if (termsRaw.length > 1) {
+    const th = termsRaw[0].map(h => h.trim().toLowerCase());
+    termsRaw.slice(1).forEach((r, i) => {
+      const brand = asBrand(r[th.indexOf('brand')] || '');
+      const text = (r[th.indexOf('text')] || '').trim();
+      if (!brand || !text || !isYes(r[th.indexOf('active')])) return;
+      terms.push({ brand, no: Number(r[th.indexOf('no')]) || i + 1, text, active: true });
+    });
+    terms.sort((a, b) => a.brand.localeCompare(b.brand) || a.no - b.no);
+  }
+  return { rows, terms };
+}
+
+async function getCachedPriceList(force = false) {
+  const now = Date.now();
+  if (!force && priceListCache && now - priceListCache.timestamp < PRICE_TTL) return priceListCache.data;
+  const data = await loadPriceList();
+  priceListCache = { data, timestamp: now };
+  return data;
+}
+
+function getQuotationScriptUrl(): string {
+  let url = process.env.QUOTATION_SCRIPT_URL || '';
+  if (
+    !url ||
+    url.includes('AKfycbxEj3dWorwbqPT4c7EAKUSA-sXIRXEBrhl3bDk29td45-GwZDOGRgbNSTas-DJwN8Wx') ||
+    url.includes('AKfycbwtkrRO_UT6U4555HtORFB3noGWEY3RsKQ1mIRYT41qnvyNrT6Uhj8F51opKdv1gxsn') ||
+    url.includes('AKfycbzrgcDNHI9QtJjyBOPpgwpuITuw20JU65Xb7VhgsUNgtnvPIIpfGxEfUPzPZ9rzdg')
+  ) {
+    url = 'https://script.google.com/macros/s/AKfycbybp6LfVhfkzXT18-LxrQdjSeyamms-JgZsEjHfaz8Z89BM4wpDBSJaYrQ7ANkV0z8I/exec';
+  }
+  return url;
 }
 
 // Authentication interceptor
@@ -890,7 +992,15 @@ async function startServer() {
         return matchId || matchName || qId === currentUser.id.trim().toLowerCase() || qName === currentUser.name.trim().toLowerCase();
       });
 
-      res.json(filtered);
+      // A quotation counts as converted once a PI row points back to it.
+      const convertedMap: Record<string, string> = {};
+      data.forEach(q => {
+        if (q.docType === 'PI' && q.linkedQuotation) convertedMap[q.linkedQuotation.trim().toLowerCase()] = q.quotationNumber;
+      });
+      res.json(filtered.map(q => ({
+        ...q,
+        convertedTo: q.docType === 'Quotation' ? (convertedMap[(q.quotationNumber || '').trim().toLowerCase()] || '') : ''
+      })));
     } catch (err: any) {
       console.error('API /api/quotation-history error:', err);
       res.status(500).json({ error: 'Failed to access quotation tracking logs.' });
@@ -905,31 +1015,163 @@ async function startServer() {
         return res.status(401).json({ error: 'Unauthorized credentials.' });
       }
 
+      // Each brand and document type has its own series: LNQ/LNPI, LZQ/LZPI, SCQ/SCPI.
+      // With no parameters this still returns the Little Nap quotation number, as before.
+      const brandParam = asBrand(String(req.query.brand || 'Little Nap')) || 'Little Nap';
+      const docTypeParam: DocType = String(req.query.docType || 'Quotation').toUpperCase() === 'PI' ? 'PI' : 'Quotation';
+
+      // Strict read: if the sheet cannot be read we fail instead of restarting the series.
       const history = await getCachedQuotationHistory();
-
-      // Find the last row with sequence pattern LNQ-2627-XXXX first, then fallback to LNQ-XXXX-XXXX
-      let lastSuffix = 6780; // default starting point (next is 6781)
-
-      for (let i = history.length - 1; i >= 0; i--) {
-        const qNum = history[i].quotationNumber;
-        if (qNum) {
-          const match = qNum.match(/LNQ-\d+-(\d+)/) || qNum.match(/LNQ-(\d+)/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (!isNaN(num)) {
-              lastSuffix = num;
-              break;
-            }
-          }
-        }
+      if (!history.length) {
+        await getQuotationHistoryStrict();
       }
-
-      const nextSeq = lastSuffix + 1;
-      const quotationNumber = `LNQ-2627-${nextSeq}`;
+      const quotationNumber = nextNumber(brandParam, docTypeParam, history.map(h => h.quotationNumber));
       res.json({ quotationNumber });
     } catch (err: any) {
       console.error('API /api/next-quotation-sequence error:', err);
       res.status(500).json({ error: 'Failed to calculate next sequence.' });
+    }
+  });
+
+  // API: Price list + terms (from the "PriceList" and "Terms" sheet tabs)
+  app.get('/api/price-list', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
+      const force = req.query.refresh === '1';
+      const data = await getCachedPriceList(force);
+      res.json({ rows: data.rows, terms: data.terms, loadedAt: priceListCache?.timestamp || Date.now() });
+    } catch (err: any) {
+      console.error('API /api/price-list error:', err);
+      res.status(500).json({ error: err.message || 'Failed to load the price list.' });
+    }
+  });
+
+  // API: Save a Quotation or a Proforma Invoice (validated and re-totalled on the server)
+  app.post('/api/quotations', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
+
+      const body = req.body || {};
+      const payload = body.payload as QuotePayload;
+      if (!payload || payload.v !== 2 || !Array.isArray(payload.lines)) {
+        return res.status(400).json({ error: 'Invalid quotation data.' });
+      }
+      const brand = asBrand(String(payload.brand || ''));
+      const docType: DocType = payload.docType === 'PI' ? 'PI' : 'Quotation';
+      if (!brand) return res.status(400).json({ error: 'Unknown brand.' });
+      payload.brand = brand;
+      payload.docType = docType;
+
+      const clientName = String(body.clientName || '').trim();
+      const mobile = String(body.mobileNumber || '').trim();
+      if (!clientName) return res.status(400).json({ error: 'Client name is required.' });
+      if (mobile.replace(/\D/g, '').length < 10) return res.status(400).json({ error: 'A valid mobile number is required.' });
+
+      // 1. Brand rules + prices against the live price list
+      const priceList = await getCachedPriceList();
+      const problems = validatePayload(payload, priceList.rows);
+      if (problems.length) return res.status(400).json({ error: problems[0], problems });
+
+      // 2. Number must belong to this brand / document series and must not exist already
+      const quotationNumber = String(body.quotationNumber || '').trim();
+      const prefix = docPrefix(brand, docType);
+      if (!new RegExp(`^${prefix}-\\d{4}-\\d+$`, 'i').test(quotationNumber)) {
+        return res.status(400).json({ error: `Number must start with ${prefix}-.` });
+      }
+      const history = await getQuotationHistoryStrict();
+      if (history.some(h => (h.quotationNumber || '').trim().toLowerCase() === quotationNumber.toLowerCase())) {
+        return res.status(409).json({ error: `${quotationNumber} was just used by someone else. The next number is loading, please try again.` });
+      }
+
+      // 3. A PI must be made from an existing, unconverted quotation of the same brand
+      let linkedQuotation = '';
+      if (docType === 'PI') {
+        linkedQuotation = String(body.linkedQuotation || '').trim();
+        const source = history.find(h => h.docType === 'Quotation' && (h.quotationNumber || '').trim().toLowerCase() === linkedQuotation.toLowerCase());
+        if (!source) return res.status(400).json({ error: 'The quotation for this PI was not found. Save the quotation first.' });
+        if ((source.brandName || '').trim().toLowerCase() !== brand.toLowerCase()) {
+          return res.status(400).json({ error: 'A PI must be in the same brand as its quotation.' });
+        }
+        const all = await getCachedSalespersons();
+        const managed = getManagedSalespeople(currentUser, all);
+        const allowed = managed.some(s =>
+          s.id.trim().toLowerCase() === (source.salespersonId || '').trim().toLowerCase() ||
+          s.name.trim().toLowerCase() === (source.salespersonName || '').trim().toLowerCase());
+        if (!allowed) return res.status(403).json({ error: 'You cannot convert this quotation.' });
+        const existingPi = history.find(h => h.docType === 'PI' && (h.linkedQuotation || '').trim().toLowerCase() === linkedQuotation.toLowerCase());
+        if (existingPi) return res.status(409).json({ error: `This quotation was already converted to ${existingPi.quotationNumber}.` });
+      }
+
+      // 4. Totals are always recalculated here; the browser's totals are ignored
+      const totals = calcTotals(payload);
+      const edited = payloadHasEditedPrices(payload);
+      const safe = (s: unknown) => {
+        const t = String(s ?? '').trim();
+        // stop a spreadsheet from running text that starts like a formula
+        return /^[=+\-@]/.test(t) ? `'${t}` : t;
+      };
+      const seq = (quotationNumber.match(/(\d+)$/) || [])[1] || '';
+
+      const sheetPayload = {
+        action: 'create-quotation-fast',
+        date: safe(body.date),
+        quotationNumber,
+        opfCode: `OPF-${seq}`,
+        brandName: brand,
+        clientName: safe(clientName),
+        mobileNumber: safe(mobile),
+        emailId: safe(body.emailId),
+        billingAddress: safe(body.billingAddress),
+        shippingAddress: safe(body.shippingAddress),
+        subtotal: totals.taxable,
+        gstIncluded: totals.gstIncluded,
+        freight: totals.freightExtra,
+        grandTotal: totals.grandTotal,
+        amountInWords: numberToWords(totals.grandTotal),
+        productsJson: JSON.stringify({ ...payload, totals, customPricing: edited }),
+        salespersonId: currentUser.id,
+        salespersonName: currentUser.name,
+        // new columns U, V, W in the quotation sheet
+        docType,
+        linkedQuotation,
+        status: docType === 'PI' ? 'PI' : 'Quotation'
+      };
+
+      const scriptUrl = getQuotationScriptUrl();
+      const response = await fetch(scriptUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(sheetPayload) });
+      const text = await response.text();
+      let result: any;
+      try { result = JSON.parse(text); } catch {
+        console.error('Apps Script returned non-JSON:', text.slice(0, 300));
+        return res.status(502).json({ error: 'The Google Apps Script did not return a valid response.' });
+      }
+      quotationHistoryCache = null;
+      if (!result || result.status !== 'success') {
+        return res.status(502).json({ error: result?.message || 'The sheet did not accept the record.' });
+      }
+
+      res.json({ status: 'success', quotationNumber, docType, totals, customPricing: edited });
+
+      // Optional: upload the PDF to Drive in the background (same as before)
+      if (body.pdfBase64) {
+        (async () => {
+          try {
+            await fetch(scriptUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({ action: 'upload-pdf-back', quotationNumber, clientName, pdfBase64: body.pdfBase64 })
+            });
+            quotationHistoryCache = null;
+          } catch (bgErr) {
+            console.error(`[Background Job] PDF upload failed for ${quotationNumber}:`, bgErr);
+          }
+        })();
+      }
+    } catch (err: any) {
+      console.error('API /api/quotations error:', err);
+      res.status(500).json({ error: err.message || 'Failed to save.' });
     }
   });
 
