@@ -47,7 +47,7 @@ export function SearchSelect({ label, value, options, onChange, placeholder = 'S
 
   return (
     <div>
-      {label && <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">{label}</label>}
+      {label && <label className="block text-[13px] font-medium text-slate-600 mb-1.5">{label}</label>}
       <button
         type="button"
         disabled={disabled}

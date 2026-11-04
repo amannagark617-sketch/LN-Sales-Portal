@@ -20,9 +20,9 @@ const todayStr = () => new Date().toLocaleDateString('en-GB', { day: '2-digit', 
 
 const field = 'w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-slate-900';
 const area = 'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:outline-none focus:border-slate-900';
-const label = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5';
-const card = 'bg-white border border-slate-200 rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.05)] p-5 sm:p-6';
-const btnPrimary = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-slate-900 text-white px-6 text-sm font-bold hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed';
+const label = 'block text-[13px] font-medium text-slate-600 mb-1.5';
+const card = 'bg-white border border-slate-200 rounded-xl shadow-sm p-5 sm:p-6';
+const btnPrimary = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-slate-900 text-white px-6 text-sm font-bold hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9B7C50] focus-visible:ring-offset-2';
 const btnGhost = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 bg-white text-slate-800 px-5 text-sm font-bold hover:border-slate-400 disabled:opacity-40';
 const fmt0 = (n: number) => 'Rs. ' + Math.round(n).toLocaleString('en-IN');
 
@@ -422,7 +422,7 @@ export function QuotationWizard({ salesperson }: Props) {
                 {STEPS.map((s, i) => (
                   <React.Fragment key={s}>
                     <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${i < step ? 'bg-slate-900 text-white' : i === step ? 'bg-slate-900 text-white ring-4 ring-slate-200' : 'bg-slate-100 text-slate-400'}`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${i < step ? 'bg-slate-900 text-white' : i === step ? 'bg-[#9B7C50] text-white ring-4 ring-[#9B7C50]/20' : 'bg-slate-100 text-slate-400'}`}>
                         {i < step ? <Check size={14} /> : i + 1}
                       </div>
                       <span className={`hidden sm:block text-xs font-bold ${i === step ? 'text-slate-900' : 'text-slate-400'}`}>{s}</span>
@@ -432,8 +432,9 @@ export function QuotationWizard({ salesperson }: Props) {
                 ))}
               </div>
 
+              <div key={step} className="step-in">
               <div className="mb-5">
-                <h2 className="text-xl font-bold tracking-tight">{docType === 'PI' && step === 4 ? 'Proforma Invoice' : STEP_HELP[step][0]}</h2>
+                <h2 className="text-2xl font-semibold tracking-tight">{docType === 'PI' && step === 4 ? 'Proforma Invoice' : STEP_HELP[step][0]}</h2>
                 <p className="text-sm text-slate-500 mt-1">{STEP_HELP[step][1]}</p>
               </div>
 
@@ -447,8 +448,9 @@ export function QuotationWizard({ salesperson }: Props) {
                 <div className="grid sm:grid-cols-2 gap-3">
                   {QUOTE_BRANDS.map(b => (
                     <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI'}
-                      className={`text-left p-5 rounded-2xl border-2 bg-white ${brand === b ? 'border-slate-900 shadow-[0_8px_30px_rgba(15,23,42,0.08)]' : 'border-slate-200 hover:border-slate-400'} disabled:opacity-60`}>
-                      <div className="font-bold text-base">{b}</div>
+                      className={`relative text-left p-6 rounded-xl border bg-white ${brand === b ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-400'} disabled:opacity-60`}>
+                      {brand === b && <Check size={18} className="absolute top-5 right-5" style={{ color: GOLD }} />}
+                      <div className="font-semibold text-lg">{b}</div>
                       <div className="text-xs text-slate-500 mt-2 leading-relaxed">
                         {b === 'Little Nap' ? 'Includes the Smart Comfort range' : 'No customisation'}<br />
                         {BRAND_RULES[b].freightDefault === 'included' ? 'Freight included' : 'Freight extra'}
@@ -500,7 +502,10 @@ export function QuotationWizard({ salesperson }: Props) {
                       <div key={l.id} className={card}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item {idx + 1}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold text-white" style={{ background: GOLD }}>{idx + 1}</span>
+                              <span className="text-sm text-slate-500">{l.category}</span>
+                            </div>
                             <div className="text-base font-bold mt-0.5">{l.item}</div>
                             {variantLabel(l.variant) && <div className="text-sm text-slate-500">{l.variant}</div>}
                           </div>
@@ -515,12 +520,12 @@ export function QuotationWizard({ salesperson }: Props) {
                         {BRAND_RULES[l.brand].customisation && (
                           <div className="mt-5 space-y-5">
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Upholstery <span className="font-normal normal-case tracking-normal text-slate-400">· seats per piece</span></div>
+                              <div className="text-sm font-semibold text-slate-900 mb-1">Upholstery <span className="font-normal text-slate-400">(quantity is seats)</span></div>
                               {upholsteries.map(optionRow)}
                               <div className="mt-2"><SearchSelect title="Add upholstery" value="" options={upholsteryOptions} placeholder="+ Add upholstery (leather, fabric…)" onChange={v => addOption(l.id, v)} /></div>
                             </div>
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Add-ons</div>
+                              <div className="text-sm font-semibold text-slate-900 mb-1">Add-ons</div>
                               {addons.map(optionRow)}
                               <div className="mt-2"><SearchSelect title="Add an add-on" value="" options={addonSelectOptions} placeholder="+ Add add-on (motor, switch, veneer…)" onChange={v => addOption(l.id, v)} /></div>
                             </div>
@@ -528,7 +533,7 @@ export function QuotationWizard({ salesperson }: Props) {
                         )}
 
                         <div className="mt-5 pt-4 border-t border-slate-100 flex justify-between items-center">
-                          <span className="text-xs uppercase tracking-wider text-slate-500 font-bold">Item total</span>
+                          <span className="text-sm font-medium text-slate-600">Item total</span>
                           <span className="text-base font-bold">{formatINR(lt.gross)}</span>
                         </div>
                       </div>
@@ -617,7 +622,7 @@ export function QuotationWizard({ salesperson }: Props) {
                       <div className="flex justify-between"><span>Taxable value (excl. GST)</span><span>{formatINR(totals.taxableExGst)}</span></div>
                       <div className="flex justify-between text-slate-500"><span>GST @ {totals.gstRate}% (included)</span><span>{formatINR(totals.gstIncluded)}</span></div>
                       <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
-                      <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200"><span>Grand total</span><span>{formatINR(totals.grandTotal)}</span></div>
+                      <div className="flex justify-between items-baseline font-semibold pt-3 mt-1 border-t border-slate-200"><span className="text-base">Grand total</span><span className="text-2xl tabular-nums">{formatINR(totals.grandTotal)}</span></div>
                     </div>
                   </div>
 
@@ -663,13 +668,25 @@ export function QuotationWizard({ salesperson }: Props) {
 
               {error && <div className="mt-5 flex gap-2 items-start text-sm text-red-700 border border-red-200 bg-red-50 rounded-xl p-3"><AlertCircle size={16} className="mt-0.5 shrink-0" />{error}</div>}
 
-              <div className="flex justify-between mt-6">
-                <button className={btnGhost} onClick={back} disabled={step === 0 || saving}><ArrowLeft size={16} /> Back</button>
-                {step < 4
-                  ? <button className={btnPrimary} onClick={next}>Next <ArrowRight size={16} /></button>
-                  : <button className={btnPrimary} onClick={save} disabled={saving}>
-                      {saving ? 'Saving…' : docType === 'PI' ? <><Check size={16} /> Save Proforma Invoice</> : <><Download size={16} /> Save quotation</>}
-                    </button>}
+              </div>
+
+              <div className="sticky bottom-0 z-30 mt-8 -mx-1 px-1 py-3 bg-white/95 backdrop-blur border-t border-slate-200">
+                <div className="flex items-center gap-3">
+                  <button className={btnGhost} onClick={back} disabled={step === 0 || saving}><ArrowLeft size={16} /> Back</button>
+                  <div className="flex-1 min-w-0 text-right">
+                    {lines.length > 0 && step >= 2 && (
+                      <>
+                        <div className="text-xs text-slate-500">{lines.length} item{lines.length > 1 ? 's' : ''}</div>
+                        <div className="text-base font-semibold truncate tabular-nums">{formatINR(totals.grandTotal)}</div>
+                      </>
+                    )}
+                  </div>
+                  {step < 4
+                    ? <button className={btnPrimary} onClick={next}>Next <ArrowRight size={16} /></button>
+                    : <button className={btnPrimary} onClick={save} disabled={saving}>
+                        {saving ? 'Saving…' : docType === 'PI' ? <><Check size={16} /> Save invoice</> : <><Download size={16} /> Save quotation</>}
+                      </button>}
+                </div>
               </div>
             </>
           )}
