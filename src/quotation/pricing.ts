@@ -37,9 +37,8 @@ export const BRAND_RULES: Record<Brand, {
   }
 };
 
-/** Smart Comfort is part of Little Nap, so the two can share a quotation. La-Z-Boy stands alone. */
+/** Every quotation is for one brand only. */
 export function allowedBrands(b: Brand): Brand[] {
-  if (b === 'Little Nap') return ['Little Nap', 'Smart Comfort'];
   return [b];
 }
 
@@ -75,7 +74,14 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
   const freightExtra = p.freight.mode === 'extra' ? r2(Math.max(0, num(p.freight.amount))) : 0;
   const grandTotal = r2(taxable + freightExtra);
   const hasAnyDiscount = overallDiscount > 0 || lines.some(l => l.discount > 0);
-  return { lines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, grandTotal, hasAnyDiscount };
+  // Share a whole-quotation discount across the items, in proportion to their value
+  let given = 0;
+  const effLines: LineTotals[] = lines.map((l, i) => {
+    const extra = i === lines.length - 1 ? r2(overallDiscount - given) : (subtotal > 0 ? r2(l.net * overallDiscount / subtotal) : 0);
+    given = r2(given + extra);
+    return { gross: l.gross, discount: r2(l.discount + extra), net: r2(l.net - extra) };
+  });
+  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, grandTotal, hasAnyDiscount };
 }
 
 export function lineIsEdited(line: QuoteLine): boolean {

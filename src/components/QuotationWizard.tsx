@@ -5,7 +5,7 @@ import {
   fetchPriceList, fetchNextNumber, saveQuotation, fetchBankDetails, fetchQuotationHistory, QuotationData
 } from '../services/dataService';
 import {
-  Brand, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload
+  Brand, BRANDS, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload
 } from '../quotation/types';
 import {
   BRAND_RULES, allowedBrands, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
@@ -26,10 +26,10 @@ const btnPrimary = 'inline-flex items-center justify-center gap-2 h-12 rounded-x
 const btnGhost = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 bg-white text-slate-800 px-5 text-sm font-bold hover:border-slate-400 disabled:opacity-40';
 const fmt0 = (n: number) => 'Rs. ' + Math.round(n).toLocaleString('en-IN');
 
-const QUOTE_BRANDS: Brand[] = ['Little Nap', 'La-Z-Boy'];
+const QUOTE_BRANDS: Brand[] = BRANDS;
 const STEPS = ['Brand', 'Customer', 'Items', 'Pricing', 'Review'] as const;
 const STEP_HELP = [
-  ['Choose the brand', 'La-Z-Boy cannot be mixed with Little Nap. The Smart Comfort range is part of Little Nap.'],
+  ['Choose the brand', 'One brand per quotation. Brands cannot be mixed.'],
   ['Customer details', 'Who is this quotation for?'],
   ['Add items', 'Pick the model, then add upholstery and add-ons for each item.'],
   ['Discount and freight', 'Optional discount, and how freight is charged.'],
@@ -83,6 +83,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const [price, setPrice] = useState<PriceListPayload | null>(null);
   const [loadErr, setLoadErr] = useState('');
   const [bank, setBank] = useState('');
+  const [bankFor, setBankFor] = useState('');
   const [logo, setLogo] = useState<string | null>(null);
 
   const [step, setStep] = useState(0);
@@ -125,14 +126,18 @@ export function QuotationWizard({ salesperson }: Props) {
     load();
     (async () => {
       try {
-        const banks: BankDetails[] = await fetchBankDetails();
-        const sh = (salesperson.showroom || '').trim().toLowerCase();
-        const rg = (salesperson.region || '').trim().toLowerCase();
-        const k = (b: BankDetails) => b.showroomOrRegion.trim().toLowerCase();
-        const m = banks.find(b => k(b) === sh) || banks.find(b => k(b) === rg)
-          || (sh ? banks.find(b => k(b).includes(sh) || sh.includes(k(b))) : undefined)
-          || (rg ? banks.find(b => k(b).includes(rg) || rg.includes(k(b))) : undefined) || banks[0];
+        const banks = (await fetchBankDetails()).filter(x => x.showroomOrRegion.trim() && x.bankingDetails.trim());
+        const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const sh = norm(salesperson.showroom || '');
+        const rg = norm(salesperson.region || '');
+        const k = (x: BankDetails) => norm(x.showroomOrRegion);
+        // showroom first, then region; never fall back to another region's account
+        const m = (sh ? banks.find(x => k(x) === sh) : undefined)
+          || (rg ? banks.find(x => k(x) === rg) : undefined)
+          || (sh ? banks.find(x => k(x).includes(sh) || sh.includes(k(x))) : undefined)
+          || (rg ? banks.find(x => k(x).includes(rg) || rg.includes(k(x))) : undefined);
         setBank(m?.bankingDetails || '');
+        setBankFor(m?.showroomOrRegion || '');
       } catch { /* bank details are only needed on the PI */ }
     })();
     (async () => {
@@ -222,9 +227,8 @@ export function QuotationWizard({ salesperson }: Props) {
     const out: string[] = [];
     const add = (b: string) => termsFor(all, b).forEach(t => { if (!out.includes(t)) out.push(t); });
     add(brand);
-    if (brand === 'Little Nap' && lines.some(l => l.brand === 'Smart Comfort')) add('Smart Comfort');
     return out;
-  }, [price, brand, lines]);
+  }, [price, brand]);
   const effectiveTerms = termsOverride ?? defaultTerms;
 
   const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean) }), [brand, docType, lines, discount, freight, gstRate, effectiveTerms]);
@@ -445,14 +449,14 @@ export function QuotationWizard({ salesperson }: Props) {
               )}
 
               {step === 0 && (
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid sm:grid-cols-3 gap-3">
                   {QUOTE_BRANDS.map(b => (
                     <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI'}
                       className={`relative text-left p-6 rounded-xl border bg-white ${brand === b ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-400'} disabled:opacity-60`}>
                       {brand === b && <Check size={18} className="absolute top-5 right-5" style={{ color: GOLD }} />}
-                      <div className="font-semibold text-lg">{b}</div>
+                      <div className="font-semibold text-lg">{b === 'Smart Comfort' ? 'Smart Comfort Range' : b}</div>
                       <div className="text-xs text-slate-500 mt-2 leading-relaxed">
-                        {b === 'Little Nap' ? 'Includes the Smart Comfort range' : 'No customisation'}<br />
+                        {BRAND_RULES[b].customisation ? 'Fully customisable' : 'No customisation'}<br />
                         {BRAND_RULES[b].freightDefault === 'included' ? 'Freight included' : 'Freight extra'}
                       </div>
                     </button>
@@ -627,8 +631,8 @@ export function QuotationWizard({ salesperson }: Props) {
                   </div>
 
                   <div className={card}>
-                    <h3 className="font-bold text-sm mb-2">Bank details</h3>
-                    {bank ? <p className="text-sm text-slate-700 whitespace-pre-line">{bank}</p> : <p className="text-sm text-slate-500">No bank details found for your showroom.</p>}
+                    <h3 className="font-bold text-sm mb-2">Bank details{bankFor ? <span className="font-normal text-slate-500"> · {bankFor}</span> : null}</h3>
+                    {bank ? <p className="text-sm text-slate-700 whitespace-pre-line">{bank}</p> : <p className="text-sm text-red-700">No bank details were found for {salesperson.region || salesperson.showroom || 'your region'}. Add a row for it in the bank details tab of the sheet.</p>}
                   </div>
 
                   <div className={card}>

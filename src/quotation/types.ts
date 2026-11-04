@@ -88,6 +88,8 @@ export interface LineTotals {
 
 export interface Totals {
   lines: LineTotals[];
+  /** per item, with any whole-quotation discount shared across the items (used on the customer PDF) */
+  effLines: LineTotals[];
   subtotal: number;
   overallDiscount: number;
   taxable: number;

@@ -48,11 +48,12 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   let y = 0;
   let page = 1;
 
-  const colQty = hasDisc ? 112 : 118;
-  const colRate = hasDisc ? 138 : 150;
-  const colDisc = 162;
-  const colTotal = 195;
-  const descW = hasDisc ? 80 : 90;
+  const colQty = hasDisc ? 104 : 125;
+  const colRate = hasDisc ? 125 : 160;   // MRP
+  const colDisc = 147;
+  const colSpecial = 169;
+  const colTotal = 193;
+  const descW = hasDisc ? 66 : 92;
 
   const header = () => {
     doc.setFillColor(GOLD); doc.rect(0, 0, W, 3, 'F');
@@ -82,15 +83,22 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   };
 
   const tableHead = () => {
-    doc.setFillColor(INK); doc.rect(15, y, W - 30, 9, 'F');
+    doc.setFillColor(INK); doc.rect(15, y, W - 30, 11, 'F');
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor('#FFFFFF');
-    doc.text('Sr.', 17, y + 6);
-    doc.text('Item', 27, y + 6);
-    doc.text('Qty', colQty, y + 6, { align: 'right' });
-    doc.text('Rate (Rs.)', colRate, y + 6, { align: 'right' });
-    if (hasDisc) doc.text('Discount', colDisc, y + 6, { align: 'right' });
-    doc.text('Amount (Rs.)', colTotal, y + 6, { align: 'right' });
-    y += 9;
+    doc.text('Sr.', 17, y + 7);
+    doc.text('Item', 27, y + 7);
+    doc.text('Qty', colQty, y + 7, { align: 'right' });
+    doc.text('MRP (Rs.)', colRate, y + 5, { align: 'right' });
+    doc.setFont('Helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor('#CBD5E1');
+    doc.text('(GST included)', colRate, y + 9, { align: 'right' });
+    doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor('#FFFFFF');
+    if (hasDisc) {
+      doc.text('Discount', colDisc, y + 7, { align: 'right' });
+      doc.text('Special', colSpecial, y + 5, { align: 'right' });
+      doc.text('Price (Rs.)', colSpecial, y + 9, { align: 'right' });
+    }
+    doc.text('Amount (Rs.)', colTotal, y + 7, { align: 'right' });
+    y += 11;
   };
 
   const space = (h: number, withHead = false) => {
@@ -135,7 +143,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   tableHead();
 
   p.lines.forEach((l, i) => {
-    const lt = t.lines[i];
+    const lt = t.effLines[i];
     const desc: string[] = [];
     const main = `${l.item}${l.variant && l.variant !== 'Standard' ? ` (${l.variant})` : ''}`;
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
@@ -148,7 +156,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
       optLines.push(...doc.splitTextToSize(label, descW - 3));
     });
     if (l.note) optLines.push(...doc.splitTextToSize(`Note: ${l.note}`, descW - 3));
-    const h = (desc.length * 4.2) + (optLines.length * 3.6) + 4;
+    const h = Math.max((desc.length * 4.2) + (optLines.length * 3.6) + 4, hasDisc ? 10 : 8);
     space(h, true);
 
     const top = y + 4.5;
@@ -160,7 +168,19 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     const perPiece = lt.gross / Math.max(1, l.qty);
     doc.text(String(l.qty), colQty, top, { align: 'right' });
     doc.text(money(perPiece), colRate, top, { align: 'right' });
-    if (hasDisc) doc.text(lt.discount > 0 ? `-${money(lt.discount)}` : '-', colDisc, top, { align: 'right' });
+    if (hasDisc) {
+      const q = Math.max(1, l.qty);
+      if (lt.discount > 0) {
+        const pct = lt.gross > 0 ? Math.round(lt.discount / lt.gross * 10000) / 100 : 0;
+        doc.text(`-${money(lt.discount / q)}`, colDisc, top, { align: 'right' });
+        doc.setFontSize(7); doc.setTextColor(GREY);
+        doc.text(`(${pct}%)`, colDisc, top + 3.6, { align: 'right' });
+        doc.setFontSize(8.5); doc.setTextColor(INK);
+      } else {
+        doc.text('-', colDisc, top, { align: 'right' });
+      }
+      doc.text(money(lt.net / q), colSpecial, top, { align: 'right' });
+    }
     doc.text(money(lt.net), colTotal, top, { align: 'right' });
     let oy = top + (desc.length - 1) * 4.2 + 3.8;
     doc.setFontSize(7.5); doc.setTextColor(GREY);
@@ -179,8 +199,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.text(val, colTotal, y, { align: 'right' });
     y += bold ? 6 : 4.8;
   };
-  row('Sub Total', `Rs. ${money(t.subtotal)}`);
-  if (t.overallDiscount > 0) row('Overall Discount', `- Rs. ${money(t.overallDiscount)}`);
+  row('Sub Total', `Rs. ${money(t.taxable)}`);
   row('Taxable Value (excl. GST)', `Rs. ${money(t.taxableExGst)}`);
   row(`GST @ ${t.gstRate}% (included)`, `Rs. ${money(t.gstIncluded)}`);
   if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
