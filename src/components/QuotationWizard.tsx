@@ -11,7 +11,6 @@ import {
   BRAND_RULES, allowedBrands, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
-import { SearchSelect, SelectOption } from './SearchSelect';
 import { ItemPicker, ItemGroup } from './ItemPicker';
 
 const GOLD = '#9B7C50';
@@ -24,6 +23,7 @@ const label = 'block text-[13px] font-medium text-slate-600 mb-1.5';
 const card = 'bg-white border border-slate-200 rounded-xl shadow-sm p-5 sm:p-6';
 const btnPrimary = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-slate-900 text-white px-6 text-sm font-bold hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9B7C50] focus-visible:ring-offset-2';
 const btnGhost = 'inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 bg-white text-slate-800 px-5 text-sm font-bold hover:border-slate-400 disabled:opacity-40';
+const ADD_BTN = 'inline-flex items-center justify-start gap-2 h-12 w-full rounded-xl border border-dashed border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:border-slate-500';
 const fmt0 = (n: number) => 'Rs. ' + Math.round(n).toLocaleString('en-IN');
 
 const QUOTE_BRANDS: Brand[] = BRANDS;
@@ -205,19 +205,25 @@ export function QuotationWizard({ salesperson }: Props) {
     });
     return out;
   }, [brandRows, categories]);
-  const upholsteryOptions: SelectOption[] = brandRows.filter(r => r.brand === 'Little Nap' && r.category === 'Upholstery').sort((a, b) => a.order - b.order)
-    .map(r => ({ value: keyOf(r), label: r.item, right: fmt0(r.price) + ' / seat' }));
-  const addonSelectOptions: SelectOption[] = brandRows.filter(r => r.brand === 'Little Nap' && addonCats.includes(r.category) && r.category !== 'Upholstery').sort((a, b) => a.order - b.order)
-    .map(r => ({ value: keyOf(r), label: r.variant && r.variant !== 'Per piece' ? `${r.item} (${r.variant})` : r.item, sub: r.category, right: fmt0(r.price) }));
+  const makeGroups = (rows: PriceRow[]): ItemGroup[] => {
+    const out: ItemGroup[] = [];
+    rows.slice().sort((x, y) => x.order - y.order).forEach(r => {
+      const key = `${r.category}|${r.item}`;
+      let g = out.find(x => x.key === key);
+      if (!g) { g = { key, item: r.item, category: r.category, rows: [] }; out.push(g); }
+      g.rows.push(r);
+    });
+    return out;
+  };
+  const upholsteryGroups = useMemo(() => makeGroups(brandRows.filter(r => r.brand === 'Little Nap' && r.category === 'Upholstery')), [brandRows]);
+  const addonGroups = useMemo(() => makeGroups(brandRows.filter(r => r.brand === 'Little Nap' && addonCats.includes(r.category) && r.category !== 'Upholstery')), [brandRows, categories]);
 
   const addPicked = (row: PriceRow) => setLines(l => [...l, rowToLine(row)]);
 
   const updateLine = (id: string, patch: Partial<QuoteLine>) => setLines(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l));
   const updateOption = (lid: string, oid: string, patch: Partial<LineOption>) =>
     setLines(ls => ls.map(l => l.id === lid ? { ...l, options: l.options.map(o => o.id === oid ? { ...o, ...patch } : o) } : l));
-  const addOption = (lid: string, key: string) => {
-    const r = rowMap.get(key);
-    if (!r) return;
+  const addOption = (lid: string, r: PriceRow) => {
     setLines(ls => ls.map(l => l.id === lid ? { ...l, options: [...l.options, rowToOption(r)] } : l));
   };
 
@@ -526,12 +532,12 @@ export function QuotationWizard({ salesperson }: Props) {
                             <div>
                               <div className="text-sm font-semibold text-slate-900 mb-1">Upholstery <span className="font-normal text-slate-400">(quantity is seats)</span></div>
                               {upholsteries.map(optionRow)}
-                              <div className="mt-2"><SearchSelect title="Add upholstery" value="" options={upholsteryOptions} placeholder="+ Add upholstery (leather, fabric…)" onChange={v => addOption(l.id, v)} /></div>
+                              <div className="mt-2"><ItemPicker groups={upholsteryGroups} title="Add upholstery" variantTitle="Choose an option" buttonLabel="Add upholstery (leather, fabric…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} /></div>
                             </div>
                             <div>
                               <div className="text-sm font-semibold text-slate-900 mb-1">Add-ons</div>
                               {addons.map(optionRow)}
-                              <div className="mt-2"><SearchSelect title="Add an add-on" value="" options={addonSelectOptions} placeholder="+ Add add-on (motor, switch, veneer…)" onChange={v => addOption(l.id, v)} /></div>
+                              <div className="mt-2"><ItemPicker groups={addonGroups} title="Add an add-on" variantTitle="Choose an option" buttonLabel="Add add-on (motor, switch, veneer…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} /></div>
                             </div>
                           </div>
                         )}

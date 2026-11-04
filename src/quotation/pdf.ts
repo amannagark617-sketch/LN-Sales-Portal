@@ -152,7 +152,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
     l.options.forEach(o => {
       const q = o.qty > 1 ? ` x${o.qty}` : '';
-      const label = `+ ${o.item}${o.variant && o.variant !== 'Per seat' ? ` (${o.variant})` : ''}${q}  Rs. ${money(o.unitPrice * o.qty)}`;
+      const label = `+ ${o.item}${o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? ` (${o.variant})` : ''}${q}  Rs. ${money(o.unitPrice * o.qty)}`;
       optLines.push(...doc.splitTextToSize(label, descW - 3));
     });
     if (l.note) optLines.push(...doc.splitTextToSize(`Note: ${l.note}`, descW - 3));
