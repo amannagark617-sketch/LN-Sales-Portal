@@ -51,6 +51,9 @@ export function discountAmount(base: number, d: Discount | undefined): number {
   return r2(Math.min(base, v));
 }
 
+/** Items sold by the metre (extra fabric, leather) take a decimal quantity such as 1.7 */
+export const isMetreOption = (o: { variant: string }) => /\b(metre|meter|mtr)s?\b/i.test(o.variant || '');
+
 export function optionUnitTotal(o: LineOption): number {
   return num(o.unitPrice) * Math.max(0, num(o.qty));
 }

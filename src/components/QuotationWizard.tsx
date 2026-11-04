@@ -8,7 +8,7 @@ import {
   Brand, BRANDS, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload
 } from '../quotation/types';
 import {
-  BRAND_RULES, allowedBrands, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
+  BRAND_RULES, allowedBrands, isMetreOption, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { ItemPicker, ItemGroup } from './ItemPicker';
@@ -66,6 +66,25 @@ const Stepper = ({ value, onChange }: { value: number; onChange: (v: number) => 
     <button type="button" aria-label="Increase" className="w-10 h-10 flex items-center justify-center text-slate-700" onClick={() => onChange(value + 1)}><Plus size={15} /></button>
   </div>
 );
+
+const MeterInput = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => {
+  const [txt, setTxt] = useState(String(value));
+  useEffect(() => { if (parseFloat(txt) !== value) setTxt(String(value)); }, [value]);
+  return (
+    <div className="inline-flex items-center h-10 rounded-xl border border-slate-200 bg-white px-3 gap-1.5">
+      <input inputMode="decimal" aria-label="Metres" className="w-14 text-sm font-bold text-center focus:outline-none" value={txt}
+        onChange={e => {
+          const t = e.target.value.replace(',', '.');
+          if (!/^\d*\.?\d{0,2}$/.test(t)) return;
+          setTxt(t);
+          const n = parseFloat(t);
+          if (n > 0) onChange(n);
+        }}
+        onBlur={() => { if (!(parseFloat(txt) > 0)) setTxt(String(value)); }} />
+      <span className="text-xs text-slate-500">metres</span>
+    </div>
+  );
+};
 
 const DiscountInput = ({ value, onChange }: { value: { mode: 'pct' | 'amt'; value: number }; onChange: (d: { mode: 'pct' | 'amt'; value: number }) => void }) => (
   <div className="flex gap-2">
@@ -500,10 +519,12 @@ export function QuotationWizard({ salesperson }: Props) {
                       <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 border-t border-slate-100">
                         <div className="min-w-0 text-sm">
                           <div className="font-medium">{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? <span className="text-slate-500 font-normal"> · {o.variant}</span> : null}</div>
-                          <div className="text-xs text-slate-500">{fmt0(o.unitPrice)} each</div>
+                          <div className="text-xs text-slate-500">{fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : 'each'}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
+                          {isMetreOption(o)
+                            ? <MeterInput value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
+                            : <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />}
                           <button className="text-red-600" aria-label="Remove" onClick={() => setLines(ls => ls.map(x => x.id === l.id ? { ...x, options: x.options.filter(y => y.id !== o.id) } : x))}><Trash2 size={17} /></button>
                         </div>
                       </div>
