@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Plus, Minus, Trash2, Upload, Download, FileCheck, ArrowLeft, ArrowRight, AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { Check, Plus, Minus, Trash2, Upload, Download, FileCheck, ArrowLeft, ArrowRight, AlertCircle, RefreshCw, Search, SlidersHorizontal, Truck, Receipt } from 'lucide-react';
 import { Salesperson, BankDetails } from '../types';
 import {
   fetchPriceList, fetchNextNumber, saveQuotation, fetchBankDetails, fetchQuotationHistory, QuotationData
@@ -69,6 +69,12 @@ const ADD_BTN = 'inline-flex items-center justify-start gap-2 h-12 w-full rounde
 const fmt0 = (n: number) => 'Rs. ' + Math.round(n).toLocaleString('en-IN');
 
 const QUOTE_BRANDS: Brand[] = BRANDS;
+// each brand keeps its own colour so the choice is recognised at a glance
+const BRAND_LOOK: Record<string, { accent: string; tint: string; line: string }> = {
+  'Little Nap': { accent: '#9B7C50', tint: '#FAF6EF', line: 'One of our own ranges, made to order' },
+  'La-Z-Boy': { accent: '#00314A', tint: '#F0F5F8', line: 'Exclusive partner of La-Z-Boy in India' },
+  'Smart Comfort': { accent: '#2F6F73', tint: '#F0F6F6', line: 'The Smart Comfort range' }
+};
 const STEPS = ['Brand', 'Customer', 'Items', 'Pricing', 'Review'] as const;
 const STEP_HELP = [
   ['Choose the brand', 'One brand per quotation. Brands cannot be mixed.'],
@@ -562,18 +568,43 @@ export function QuotationWizard({ salesperson }: Props) {
               )}
 
               {step === 0 && (
-                <div className="grid sm:grid-cols-3 gap-3">
-                  {QUOTE_BRANDS.map(b => (
-                    <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI'}
-                      className={`relative text-left p-6 rounded-xl border bg-white ${brand === b ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-400'} disabled:opacity-60`}>
-                      {brand === b && <Check size={18} className="absolute top-5 right-5" style={{ color: GOLD }} />}
-                      <div className="font-semibold text-lg">{b === 'Smart Comfort' ? 'Smart Comfort Range' : b}</div>
-                      <div className="text-xs text-slate-500 mt-2 leading-relaxed">
-                        {BRAND_RULES[b].customisation ? 'Fully customisable' : 'No customisation'}<br />
-                        {BRAND_RULES[b].freightDefault === 'included' ? 'Freight included' : 'Freight extra'}
-                      </div>
-                    </button>
-                  ))}
+                <div>
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    {QUOTE_BRANDS.map(b => {
+                      const look = BRAND_LOOK[b] || BRAND_LOOK['Little Nap'];
+                      const on = brand === b;
+                      const rules = BRAND_RULES[b];
+                      return (
+                        <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI'} aria-pressed={on}
+                          className="group relative flex flex-col h-full text-left rounded-xl bg-white overflow-hidden border transition-shadow hover:shadow-md disabled:opacity-60 disabled:hover:shadow-none"
+                          style={{ borderColor: on ? look.accent : '#E2E8F0', boxShadow: on ? `0 0 0 1px ${look.accent}` : undefined }}>
+                          <div className="h-1.5 shrink-0" style={{ background: look.accent }} />
+                          <div className="h-24 shrink-0 flex items-center justify-center px-6" style={{ background: look.tint }}>
+                            {b === 'La-Z-Boy' ? (
+                              <img src="/assets/lazboy-logo.png" alt="La-Z-Boy" className="max-h-12 w-auto" />
+                            ) : b === 'Little Nap' && logo ? (
+                              <img src={logo} alt="Little Nap" className="max-h-14 w-auto" />
+                            ) : (
+                              <span className="text-2xl font-bold tracking-tight" style={{ color: look.accent }}>{b === 'Smart Comfort' ? 'Smart Comfort' : b}</span>
+                            )}
+                          </div>
+                          {on && (
+                            <span className="absolute top-4 right-3 w-6 h-6 rounded-md flex items-center justify-center text-white" style={{ background: look.accent }}><Check size={15} /></span>
+                          )}
+                          <div className="p-5">
+                            <div className="font-bold text-lg text-slate-900">{b === 'Smart Comfort' ? 'Smart Comfort Range' : b}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{look.line}</div>
+                            <ul className="mt-4 space-y-2.5 text-sm text-slate-700">
+                              <li className="flex items-center gap-2.5"><SlidersHorizontal size={16} style={{ color: look.accent }} />{rules.customisation ? 'Fully customisable' : 'No customisation'}</li>
+                              <li className="flex items-center gap-2.5"><Truck size={16} style={{ color: look.accent }} />{rules.freightDefault === 'included' ? 'Freight included' : 'Freight extra, on actual'}</li>
+                              <li className="flex items-center gap-2.5"><Receipt size={16} style={{ color: look.accent }} />GST included in prices</li>
+                            </ul>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {docType === 'PI' && <p className="mt-3 text-xs text-slate-500">The brand is fixed because this Proforma Invoice comes from a quotation.</p>}
                 </div>
               )}
 
