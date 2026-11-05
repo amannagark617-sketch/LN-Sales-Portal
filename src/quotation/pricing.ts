@@ -65,7 +65,7 @@ export function calcLine(line: QuoteLine): LineTotals {
   return { gross, discount, net: r2(gross - discount) };
 }
 
-export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight'> & { gstRate?: number }): Totals {
+export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight'> & { gstRate?: number; installation?: number; advance?: number }): Totals {
   const lines = p.lines.map(calcLine);
   const subtotal = r2(lines.reduce((s, l) => s + l.net, 0));
   const overallDiscount = discountAmount(subtotal, p.discount);
@@ -75,7 +75,10 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
   const gstIncluded = r2(taxable / (1 + rate) * rate);
   const taxableExGst = r2(taxable - gstIncluded);
   const freightExtra = p.freight.mode === 'extra' ? r2(Math.max(0, num(p.freight.amount))) : 0;
-  const grandTotal = r2(taxable + freightExtra);
+  const installation = r2(Math.max(0, num(p.installation)));
+  const grandTotal = r2(taxable + freightExtra + installation);
+  const advance = r2(Math.max(0, num(p.advance)));
+  const balance = r2(grandTotal - advance);
   const hasAnyDiscount = overallDiscount > 0 || lines.some(l => l.discount > 0);
   // Share a whole-quotation discount across the items, in proportion to their value
   let given = 0;
@@ -84,7 +87,7 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
     given = r2(given + extra);
     return { gross: l.gross, discount: r2(l.discount + extra), net: r2(l.net - extra) };
   });
-  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, grandTotal, hasAnyDiscount };
+  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, installation, grandTotal, advance, balance, hasAnyDiscount };
 }
 
 export function lineIsEdited(line: QuoteLine): boolean {
@@ -151,9 +154,12 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
       problems.push(`Item ${idx + 1}: the specifications are not valid.`);
     }
   });
-  if (p.customer !== undefined && (typeof p.customer !== 'object' || p.customer === null || [p.customer.site, p.customer.kindAttn, p.customer.gstin].some(x => x !== undefined && bad(x, 200)))) {
+  if (p.customer !== undefined && (typeof p.customer !== 'object' || p.customer === null || [p.customer.site, p.customer.gstin].some(x => x !== undefined && bad(x, 200)))) {
     problems.push('The customer details are not valid.');
   }
+  if (p.installation !== undefined && !(num(p.installation) >= 0)) problems.push('Installation must be zero or more.');
+  if (p.advance !== undefined && !(num(p.advance) >= 0)) problems.push('Advance must be zero or more.');
+  if (p.contact !== undefined && (typeof p.contact !== 'object' || p.contact === null || [p.contact.phone, p.contact.email].some(x => x !== undefined && bad(x, 120)))) problems.push('The contact details are not valid.');
   if (p.terms !== undefined) {
     if (!Array.isArray(p.terms) || p.terms.length > 40 || p.terms.some(t => typeof t !== 'string' || t.length > 800)) problems.push('The terms and conditions are not valid.');
   }

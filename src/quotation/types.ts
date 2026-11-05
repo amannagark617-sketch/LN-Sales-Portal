@@ -54,7 +54,6 @@ export interface SpecLine {
 
 export interface CustomerExtra {
   site?: string;
-  kindAttn?: string;
   gstin?: string;
 }
 
@@ -92,6 +91,14 @@ export interface QuotePayload {
   /** terms and conditions as shown on the document (editable by the user) */
   terms?: string[];
   customer?: CustomerExtra;
+  /** optional installation charge added to the total */
+  installation?: number;
+  /** optional advance received, shown with the balance due */
+  advance?: number;
+  /** print the bank details block (default true) */
+  showBank?: boolean;
+  /** salesperson contact shown in the header block */
+  contact?: { phone?: string; email?: string };
 }
 
 export interface LineTotals {
@@ -112,7 +119,10 @@ export interface Totals {
   gstRate: number;
   gstIncluded: number;
   freightExtra: number;
+  installation: number;
   grandTotal: number;
+  advance: number;
+  balance: number;
   hasAnyDiscount: boolean;
 }
 

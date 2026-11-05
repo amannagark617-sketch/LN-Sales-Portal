@@ -126,13 +126,18 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   heading(`${isPI ? 'PI' : 'QUOTATION'} DETAILS`);
   kv('Date:', m.date, 15); kv('Prepared by:', m.salespersonName, 112); y += 4.5;
   kv('Number:', m.number, 15); kv('Employee No:', m.salespersonId || 'N/A', 112); y += 4.5;
+  if (p.contact?.phone || p.contact?.email) {
+    if (p.contact.phone) kv('Contact:', p.contact.phone, 112);
+    y += 4.5;
+    if (p.contact.email) { kv('Email:', p.contact.email, 112); y += 4.5; }
+  }
   y += 3;
 
   heading('CLIENT & DELIVERY');
   kv('Client:', m.clientName || 'N/A', 15); kv('Phone:', m.mobile || 'N/A', 112); y += 4.5;
   kv('Email:', m.email || 'N/A', 15); y += 4.5;
   const cx = p.customer || {};
-  if (cx.site || cx.kindAttn) { if (cx.site) kv('Site:', cx.site, 15); if (cx.kindAttn) kv('Kind attn.:', cx.kindAttn, 112); y += 4.5; }
+  if (cx.site) { kv('Site:', cx.site, 15); y += 4.5; }
   if (cx.gstin) { kv('Customer GSTIN:', cx.gstin, 15); y += 4.5; }
   y += 0.5;
   doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(INK);
@@ -216,14 +221,20 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   row(`GST @ ${t.gstRate}% (included)`, `Rs. ${money(t.gstIncluded)}`);
   if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
   else row('Freight', 'Included');
+  if (t.installation > 0) row('Installation', `Rs. ${money(t.installation)}`);
   doc.setDrawColor(GOLD); doc.setLineWidth(0.5); doc.line(100, y - 3, W - 15, y - 3);
   y += 1.5;
   row('GRAND TOTAL', `Rs. ${money(t.grandTotal)}`, true);
   doc.setFont('Helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(GREY);
   doc.text(numberToWords(t.grandTotal), 15, y);
-  y += 8;
+  y += 6;
+  if (t.advance > 0) {
+    row('Advance received', `Rs. ${money(t.advance)}`);
+    row('Balance due', `Rs. ${money(t.balance)}`, true);
+  }
+  y += 2;
 
-  if (m.bank) {
+  if (m.bank && p.showBank !== false) {
     heading('BANK DETAILS');
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(GREY);
     doc.splitTextToSize(m.bank, W - 35).forEach((s: string) => { space(5); doc.text(s, 15, y); y += 4.2; });

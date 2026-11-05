@@ -160,7 +160,12 @@ export function QuotationWizard({ salesperson }: Props) {
   const [sameAddr, setSameAddr] = useState(true);
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [site, setSite] = useState('');
-  const [kindAttn, setKindAttn] = useState('');
+  const [installation, setInstallation] = useState(0);
+  const [advance, setAdvance] = useState(0);
+  const [showBank, setShowBank] = useState(true);
+  const [contactPhone, setContactPhone] = useState(() => { try { return localStorage.getItem(`ln_contact_phone_${salesperson.id}`) || ''; } catch { return ''; } });
+  const [contactEmail, setContactEmail] = useState(() => { try { return localStorage.getItem(`ln_contact_email_${salesperson.id}`) || ''; } catch { return ''; } });
+  useEffect(() => { try { localStorage.setItem(`ln_contact_phone_${salesperson.id}`, contactPhone); localStorage.setItem(`ln_contact_email_${salesperson.id}`, contactEmail); } catch { /* ignore */ } }, [contactPhone, contactEmail, salesperson.id]);
   const [custGstin, setCustGstin] = useState('');
   const [discount, setDiscount] = useState(emptyDiscount());
   const [termsOverride, setTermsOverride] = useState<string[] | null>(null);
@@ -302,15 +307,20 @@ export function QuotationWizard({ salesperson }: Props) {
   const effectiveTerms = termsOverride ?? defaultTerms;
 
   const payload: QuotePayload = useMemo(() => {
-    const customer = { site: site.trim(), kindAttn: kindAttn.trim(), gstin: custGstin.trim() };
-    const hasCust = !!(customer.site || customer.kindAttn || customer.gstin);
+    const customer = { site: site.trim(), gstin: custGstin.trim() };
+    const hasCust = !!(customer.site || customer.gstin);
+    const contact = { phone: contactPhone.trim(), email: contactEmail.trim() };
     return {
       v: 2, brand, docType,
       lines: lines.map(l => ({ ...l, specs: specFilled(l.specs).map(x => ({ label: x.label.trim(), value: x.value.trim() })) })),
       discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean),
-      ...(hasCust ? { customer } : {})
+      ...(hasCust ? { customer } : {}),
+      ...(installation > 0 ? { installation } : {}),
+      ...(advance > 0 ? { advance } : {}),
+      showBank,
+      ...(contact.phone || contact.email ? { contact } : {})
     };
-  }, [brand, docType, lines, discount, freight, gstRate, effectiveTerms, site, kindAttn, custGstin]);
+  }, [brand, docType, lines, discount, freight, gstRate, effectiveTerms, site, custGstin, installation, advance, showBank, contactPhone, contactEmail]);
   const totals = useMemo(() => calcTotals(payload), [payload]);
 
 
@@ -334,7 +344,7 @@ export function QuotationWizard({ salesperson }: Props) {
 
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
-    setBilling(''); setShipping(''); setSite(''); setKindAttn(''); setCustGstin(''); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
+    setBilling(''); setShipping(''); setSite(''); setCustGstin(''); setInstallation(0); setAdvance(0); setShowBank(true); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
     setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
   };
 
@@ -399,7 +409,7 @@ export function QuotationWizard({ salesperson }: Props) {
     setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setTermsOverride(p.terms && p.terms.length ? p.terms : null); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0) ? 'item' : 'whole');
     setClientName(r.clientName); setCompany(''); setMobile(String(r.mobileNumber || '')); setEmail(r.emailId || '');
     setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(!r.shippingAddress || r.shippingAddress === r.billingAddress);
-    setSite(p.customer?.site || ''); setKindAttn(p.customer?.kindAttn || ''); setCustGstin(p.customer?.gstin || '');
+    setSite(p.customer?.site || ''); setCustGstin(p.customer?.gstin || ''); setInstallation(p.installation || 0); setAdvance(p.advance || 0); setShowBank(p.showBank !== false);
     setAttachments([]); setSaved(null); setError('');
     if (asPI) { setDocType('PI'); setLinkedQuotation(r.quotationNumber); setStep(4); }
     else { setDocType('Quotation'); setLinkedQuotation(''); setStep(2); }
@@ -556,12 +566,13 @@ export function QuotationWizard({ salesperson }: Props) {
                   <div className="sm:col-span-2 border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2 text-sm font-semibold text-slate-900">More details <span className="font-normal text-slate-400">(optional, shown only if filled)</span></div>
                     <div><label className={label}>Site / project</label><input className={field} value={site} onChange={e => setSite(e.target.value)} /></div>
-                    <div><label className={label}>Kind attn.</label><input className={field} value={kindAttn} onChange={e => setKindAttn(e.target.value)} /></div>
                     <div><label className={label}>Customer GSTIN</label><input className={field} value={custGstin} onChange={e => setCustGstin(e.target.value)} /></div>
                   </div>
                   <div className="sm:col-span-2 border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
                     <div><label className={label}>Prepared by</label><input className={`${field} bg-slate-50`} value={salesperson.name} readOnly /></div>
                     <div><label className={label}>Employee number</label><input className={field} value={employeeNo} onChange={e => setEmployeeNo(e.target.value)} /></div>
+                    <div><label className={label}>Your contact number</label><input className={field} inputMode="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Shown in the header, optional" /></div>
+                    <div><label className={label}>Your email</label><input className={field} type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="Shown in the header, optional" /></div>
                   </div>
                 </div>
               )}
@@ -689,6 +700,16 @@ export function QuotationWizard({ salesperson }: Props) {
                       )}
                       <p className="text-xs text-slate-500 mt-3">{rule.freightNote}</p>
                     </div>
+                    <div className={card}>
+                      <h3 className="font-bold mb-3 text-sm">Installation and advance <span className="font-normal text-slate-400">(optional)</span></h3>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div><label className={label}>Installation charge (Rs.)</label>
+                          <input className={field} type="number" min={0} value={installation || ''} onChange={e => setInstallation(Math.max(0, Number(e.target.value) || 0))} /></div>
+                        <div><label className={label}>Advance received (Rs.)</label>
+                          <input className={field} type="number" min={0} value={advance || ''} onChange={e => setAdvance(Math.max(0, Number(e.target.value) || 0))} /></div>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-3">Leave blank to hide these rows. Installation is added to the grand total; advance shows the balance due.</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -716,13 +737,17 @@ export function QuotationWizard({ salesperson }: Props) {
                       <div className="flex justify-between"><span>Taxable value (excl. GST)</span><span>{formatINR(totals.taxableExGst)}</span></div>
                       <div className="flex justify-between text-slate-500"><span>GST @ {totals.gstRate}% (included)</span><span>{formatINR(totals.gstIncluded)}</span></div>
                       <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
+                      {totals.installation > 0 && <div className="flex justify-between"><span>Installation</span><span>{formatINR(totals.installation)}</span></div>}
                       <div className="flex justify-between items-baseline font-semibold pt-3 mt-1 border-t border-slate-200"><span className="text-base">Grand total</span><span className="text-2xl tabular-nums">{formatINR(totals.grandTotal)}</span></div>
+                      {totals.advance > 0 && <div className="flex justify-between pt-2"><span>Advance received</span><span>{formatINR(totals.advance)}</span></div>}
+                      {totals.advance > 0 && <div className="flex justify-between font-semibold"><span>Balance due</span><span>{formatINR(totals.balance)}</span></div>}
                     </div>
                   </div>
 
                   <div className={card}>
                     <h3 className="font-bold text-sm mb-2">Bank details{bankFor ? <span className="font-normal text-slate-500"> · {bankFor}</span> : null}</h3>
-                    {bank ? <p className="text-sm text-slate-700 whitespace-pre-line">{bank}</p> : <p className="text-sm text-red-700">No bank details were found for {salesperson.region || salesperson.showroom || 'your region'}. Add a row for it in the bank details tab of the sheet.</p>}
+                    <label className="flex items-center gap-2 text-sm mb-2"><input type="checkbox" checked={showBank} onChange={e => setShowBank(e.target.checked)} /> Show bank details on the document</label>
+                    {!showBank ? <p className="text-sm text-slate-500">Bank details will not be printed.</p> : bank ? <p className="text-sm text-slate-700 whitespace-pre-line">{bank}</p> : <p className="text-sm text-red-700">No bank details were found for {salesperson.region || salesperson.showroom || 'your region'}. Add a row for it in the bank details tab of the sheet.</p>}
                   </div>
 
                   <div className={card}>
