@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ReadyStock } from './components/ReadyStock';
-import { InstallButton, UpdateBanner } from './components/InstallApp';
+import { InstallButton, InstallPrompt, UpdateBanner } from './components/InstallApp';
 import { refreshServerData, fetchSalespersons, fetchValidationData, fetchOPFData, fetchUniqueOPFCodeMap, fetchTargets, loginSalesperson } from './services/dataService';
 import { Salesperson, ValidationData, OPFData, SalesTarget } from './types';
 import { Button } from './components/ui';
@@ -244,6 +244,7 @@ function MainContent() {
   return (
     <div className="min-h-screen premium-bg p-3 md:p-8" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
       <UpdateBanner />
+      {user && <InstallPrompt />}
       <header className="glass-header rounded-2xl shadow-lg p-3 md:p-4 mb-6 md:mb-8 md:sticky md:top-4 z-50">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-4">
           
