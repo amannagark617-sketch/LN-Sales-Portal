@@ -4,13 +4,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { fetchSalespersons, fetchValidationData, fetchOPFData, fetchUniqueOPFCodeMap, fetchTargets, loginSalesperson } from './services/dataService';
+import { refreshServerData, fetchSalespersons, fetchValidationData, fetchOPFData, fetchUniqueOPFCodeMap, fetchTargets, loginSalesperson } from './services/dataService';
 import { Salesperson, ValidationData, OPFData, SalesTarget } from './types';
 import { Button } from './components/ui';
 import { SaleForm } from './components/SaleForm';
 import { NoSaleForm } from './components/NoSaleForm';
 import { Dashboard } from './components/Dashboard';
-import { LogOut, LayoutDashboard, FileText, Ban, History } from 'lucide-react';
+import { LogOut, LayoutDashboard, FileText, Ban, History, RefreshCw } from 'lucide-react';
 import { MySubmissions } from './components/MySubmissions';
 import { QuotationWizard } from './components/QuotationWizard';
 import { LoadingScreen } from './components/LoadingScreen';
@@ -36,6 +36,7 @@ function MainContent() {
   const [targets, setTargets] = useState<SalesTarget[]>([]);
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState<'dashboard' | 'sale' | 'noSale' | 'submissions' | 'quotation'>('sale');
 
   useEffect(() => {
@@ -250,6 +251,14 @@ function MainContent() {
               <h1 className="font-bold text-slate-800 tracking-tight whitespace-nowrap text-sm md:text-base leading-tight">Little Nap Recliners</h1>
             </div>
             
+            <button
+              onClick={async () => { setRefreshing(true); try { await refreshServerData(); await refreshData(true); } finally { setRefreshing(false); } }}
+              disabled={refreshing}
+              className="lg:hidden h-8.5 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold transition-all border border-slate-200 disabled:opacity-50"
+            >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+                <span>Refresh data</span>
+            </button>
             <button 
               onClick={() => {
                 setUser(null);
@@ -335,6 +344,14 @@ function MainContent() {
             
             <div className="w-px h-8 bg-slate-200/80 mx-1 hidden lg:block shrink-0"></div>
             
+            <button
+              onClick={async () => { setRefreshing(true); try { await refreshServerData(); await refreshData(true); } finally { setRefreshing(false); } }}
+              disabled={refreshing}
+              className="hidden lg:flex h-10 px-4 rounded-xl items-center justify-center gap-2 shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition-all border border-slate-200 disabled:opacity-50"
+            >
+                <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+                <span>Refresh data</span>
+            </button>
             <button 
               onClick={() => {
                 setUser(null);

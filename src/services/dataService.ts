@@ -40,6 +40,10 @@ export const loginSalesperson = async (id: string, password: string): Promise<Sa
   return { ...user, password };
 };
 
+export const refreshServerData = async (): Promise<void> => {
+  await fetch('/api/refresh-data', { method: 'POST', headers: getAuthHeaders() });
+};
+
 export const fetchTargets = async (): Promise<SalesTarget[]> => {
   try {
     const response = await fetch('/api/targets', {

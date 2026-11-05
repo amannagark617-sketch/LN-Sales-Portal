@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import {
@@ -15,12 +16,16 @@ let salespersonsCache: CacheEntry<any[]> | null = null;
 let targetsCache: CacheEntry<any[]> | null = null;
 let validationCache: CacheEntry<any> | null = null;
 let opfDataCache: CacheEntry<any[]> | null = null;
+// Separate, longer-lived cache of the same OPF sheet used only by dashboard / list views.
+// The OPF number sequence calculation keeps using opfDataCache (short TTL) exactly as before.
+let opfViewCache: CacheEntry<any[]> | null = null;
 let codeMapCache: CacheEntry<Record<string, string>> | null = null;
 let quotationOptionsCache: CacheEntry<any[]> | null = null;
 let quotationHistoryCache: CacheEntry<any[]> | null = null;
 let bankDetailsCache: CacheEntry<any[]> | null = null;
 
-const CACHE_TTL = 4000; // 4 seconds for fast real-time sequence synchronization
+const CACHE_TTL = 4000; // 4 seconds for fast real-time sequence synchronization (OPF / quotation numbering)
+const LONG_TTL = 60000; // 60 seconds for data that is only displayed (dashboards, lists, auth lookups)
 
 const BASE_URL = 'https://docs.google.com/spreadsheets/d/1-K_S1HXjca8dy0Sbl2qN7ts_e_YnKg5fBVSmaHB8kgU/export?format=csv&gid=';
 
@@ -322,7 +327,7 @@ function resolveTargetShowroom(
 // Memory-Cached Getters
 async function getCachedSalespersons(): Promise<any[]> {
   const now = Date.now();
-  if (salespersonsCache && (now - salespersonsCache.timestamp < CACHE_TTL)) {
+  if (salespersonsCache && (now - salespersonsCache.timestamp < LONG_TTL)) {
     return salespersonsCache.data;
   }
   const data = await getSalespersons();
@@ -332,7 +337,7 @@ async function getCachedSalespersons(): Promise<any[]> {
 
 async function getCachedValidation(): Promise<any> {
   const now = Date.now();
-  if (validationCache && (now - validationCache.timestamp < CACHE_TTL)) {
+  if (validationCache && (now - validationCache.timestamp < LONG_TTL)) {
     return validationCache.data;
   }
   const data = await getValidationData();
@@ -350,14 +355,26 @@ async function getCachedOPFData(): Promise<any[]> {
   return data;
 }
 
+// Longer-lived OPF data for dashboards / "my submissions" / manager scoping.
+// Not used by the OPF number sequence endpoint.
+async function getCachedOPFDataForViews(): Promise<any[]> {
+  const now = Date.now();
+  if (opfViewCache && (now - opfViewCache.timestamp < LONG_TTL)) {
+    return opfViewCache.data;
+  }
+  const data = await getOPFData();
+  opfViewCache = { data, timestamp: now };
+  return data;
+}
+
 async function getCachedTargets(): Promise<any[]> {
   const now = Date.now();
-  if (targetsCache && (now - targetsCache.timestamp < CACHE_TTL)) {
+  if (targetsCache && (now - targetsCache.timestamp < LONG_TTL)) {
     return targetsCache.data;
   }
   const rawTargets = await getTargets();
   const allUsers = await getCachedSalespersons();
-  const allRows = await getCachedOPFData();
+  const allRows = await getCachedOPFDataForViews();
 
   const data = rawTargets.map(t => {
     const [mStr, yStr] = t.monthYear.split('-');
@@ -697,8 +714,22 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(compression());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // Manual refresh of the display-only caches. Ignored if refreshed in the last 10 seconds.
+  let lastManualRefresh = 0;
+  app.post('/api/refresh-data', async (req, res) => {
+    const currentUser = await authenticate(req);
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
+    const now = Date.now();
+    if (now - lastManualRefresh > 10000) {
+      lastManualRefresh = now;
+      salespersonsCache = null; validationCache = null; targetsCache = null; opfViewCache = null;
+    }
+    res.json({ ok: true });
+  });
 
   // API 1: Login
   app.post('/api/login', async (req, res) => {
@@ -738,7 +769,7 @@ async function startServer() {
       const managed = getManagedSalespeople(currentUser, all);
       const managedIds = new Set(managed.map(s => s.id));
       const managerRooms = getManagerShowrooms(currentUser, all);
-      const allRows = await getCachedOPFData();
+      const allRows = await getCachedOPFDataForViews();
 
       const peopleWithSalesInRoom = new Set(
         allRows
@@ -782,7 +813,7 @@ async function startServer() {
 
       const managed = getManagedSalespeople(currentUser, all);
       const managerRooms = getManagerShowrooms(currentUser, all);
-      const allRows = await getCachedOPFData();
+      const allRows = await getCachedOPFDataForViews();
 
       const relevantNames = new Set([
         ...managed.map(s => s.name.trim().toLowerCase()),
@@ -819,7 +850,7 @@ async function startServer() {
       }
 
       const all = await getCachedSalespersons();
-      const allRows = await getCachedOPFData();
+      const allRows = await getCachedOPFDataForViews();
 
       if (!currentUser.isManager) {
         const myName = currentUser.name.trim().toLowerCase();
