@@ -24,6 +24,8 @@ export interface StockTabData { items: StockItem[]; error?: string }
 export interface StockPayload { tabs: Record<StockTab, StockTabData>; loadedAt: number }
 
 const norm = (s: string) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+/** Header text as Google exports it: a number from a title row can end up in front of it ("70 QTY."). */
+const normHeader = (s: string) => norm(s).replace(/^\d+(\.\d+)?\s+(?=\D)/, '');
 const clean = (s: string | undefined) => String(s ?? '').replace(/\r/g, '').trim();
 const KEEP_UPPER = new Set(['NX', 'HR', 'USB', 'XR', 'LED', 'OPF', 'II', 'III']);
 const SMALL = new Set(['of', 'and', 'with', 'in', 'on', 'for', 'to', 'the']);
@@ -73,7 +75,7 @@ const num = (s: string | undefined) => {
 /** Finds the header row (it is not always row 1 because some tabs have a title row above it). */
 function findHeader(rows: string[][], needs: string[]): { at: number; cols: string[] } | null {
   for (let i = 0; i < Math.min(rows.length, 12); i++) {
-    const cols = rows[i].map(norm);
+    const cols = rows[i].map(normHeader);
     if (needs.every(n => cols.some(c => c === n || c.startsWith(n)))) return { at: i, cols };
   }
   return null;

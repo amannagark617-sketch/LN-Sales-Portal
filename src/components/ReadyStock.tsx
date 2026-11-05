@@ -16,12 +16,15 @@ const normQuery = (s: string) => s.toLowerCase().replace(/motorized/g, 'motorise
 
 interface Group { model: string; items: StockItem[]; qty: number; image: string }
 
-function PieceImage({ src, name, className }: { src: string; name: string; className?: string }) {
+/** Same picture, asked from Google at a smaller size, so cards load fast and use little data. */
+const sized = (url: string, w: number) => url.replace(/(sz=w|=w)\d+/, '$1' + w);
+
+function PieceImage({ src, name, className, width = 400 }: { src: string; name: string; className?: string; width?: number }) {
   const [bad, setBad] = useState(false);
   if (!src || bad) {
     return <div className={`${className} bg-slate-50 flex items-center justify-center text-slate-300`}><span className="text-3xl font-light" style={{ color: GOLD }}>{name.charAt(0)}</span></div>;
   }
-  return <img src={src} alt={name} loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} className={`${className} object-cover bg-slate-50`} />;
+  return <img src={sized(src, width)} alt={name} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBad(true)} className={`${className} object-cover bg-slate-50`} />;
 }
 
 export function ReadyStock({ salespersonName }: { salespersonName: string }) {
@@ -198,7 +201,7 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
               {open.items.map(i => (
                 <div key={i.id} className="flex gap-4 border border-slate-100 rounded-xl p-3">
                   {i.image
-                    ? <a href={i.image.replace(/(sz=w|=w)\d+/, '$1' + '1600')} target="_blank" rel="noreferrer" className="shrink-0"><PieceImage src={i.image} name={i.model} className="w-28 h-28 sm:w-36 sm:h-36 rounded-lg" /></a>
+                    ? <a href={i.image.replace(/(sz=w|=w)\d+/, '$1' + '1600')} target="_blank" rel="noreferrer" className="shrink-0"><PieceImage src={i.image} name={i.model} width={600} className="w-28 h-28 sm:w-36 sm:h-36 rounded-lg" /></a>
                     : <PieceImage src="" name={i.model} className="w-28 h-28 sm:w-36 sm:h-36 rounded-lg shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className="text-base font-bold text-slate-900">{i.title}</div>
