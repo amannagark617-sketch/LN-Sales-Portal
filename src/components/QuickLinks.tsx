@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Globe, MessageCircle, Linkedin, Instagram, Facebook, Youtube, Twitter, FolderOpen, Copy, Check, ExternalLink } from 'lucide-react';
+import { Globe, MessageCircle, Linkedin, Instagram, Facebook, Youtube, Twitter, FolderOpen, FileText, Copy, Check, ExternalLink } from 'lucide-react';
 import { QUICK_LINKS, QuickLink } from '../links';
 
 const ICONS: Record<QuickLink['icon'], { Icon: React.ComponentType<any>; color: string }> = {
@@ -10,7 +10,8 @@ const ICONS: Record<QuickLink['icon'], { Icon: React.ComponentType<any>; color: 
   facebook: { Icon: Facebook, color: '#1F5FBF' },
   youtube: { Icon: Youtube, color: '#C4302B' },
   x: { Icon: Twitter, color: '#1F2937' },
-  folder: { Icon: FolderOpen, color: '#9B7C50' }
+  folder: { Icon: FolderOpen, color: '#9B7C50' },
+  file: { Icon: FileText, color: '#00314A' }
 };
 
 function LinkCard({ link }: { link: QuickLink }) {
