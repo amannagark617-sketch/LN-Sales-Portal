@@ -1,29 +1,38 @@
 import React, { useState } from 'react';
-import { Globe, MessageCircle, Linkedin, Instagram, Facebook, Youtube, Twitter, FolderOpen, FileText, Copy, Check, ExternalLink } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
 import { QUICK_LINKS, QuickLink } from '../links';
+import { BRAND_ICONS } from '../brandIcons';
 
-const ICONS: Record<QuickLink['icon'], { Icon: React.ComponentType<any>; color: string }> = {
-  globe: { Icon: Globe, color: '#0F4C81' },
-  whatsapp: { Icon: MessageCircle, color: '#1E8E5A' },
-  linkedin: { Icon: Linkedin, color: '#0A66C2' },
-  instagram: { Icon: Instagram, color: '#B03A6F' },
-  facebook: { Icon: Facebook, color: '#1F5FBF' },
-  youtube: { Icon: Youtube, color: '#C4302B' },
-  x: { Icon: Twitter, color: '#1F2937' },
-  folder: { Icon: FolderOpen, color: '#9B7C50' },
-  file: { Icon: FileText, color: '#00314A' }
-};
+/** The real logo of each brand: official artwork for the social apps, and our own logo for the website. */
+function BrandMark({ icon }: { icon: QuickLink['icon'] }) {
+  if (icon === 'globe') return <img src="/assets/littlenap-logo.png" alt="Little Nap" className="w-10 h-10 object-contain" />;
+  const key = icon === 'folder' || icon === 'file' ? 'drive' : icon;
+  const b = BRAND_ICONS[key];
+  if (!b) return null;
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" role="img" aria-label={key}>
+      {key === 'instagram' && (
+        <defs>
+          <radialGradient id="ig" cx="30%" cy="107%" r="150%">
+            <stop offset="0" stopColor="#FDF497" /><stop offset="0.05" stopColor="#FDF497" />
+            <stop offset="0.45" stopColor="#FD5949" /><stop offset="0.6" stopColor="#D6249F" /><stop offset="0.9" stopColor="#285AEB" />
+          </radialGradient>
+        </defs>
+      )}
+      <path d={b.path} fill={key === 'instagram' ? 'url(#ig)' : b.color} />
+    </svg>
+  );
+}
 
 function LinkCard({ link }: { link: QuickLink }) {
   const [copied, setCopied] = useState(false);
-  const { Icon, color } = ICONS[link.icon];
   const copy = async () => {
     try { await navigator.clipboard.writeText(link.url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* the Open button still works */ }
   };
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4">
-      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '14', color }}>
-        <Icon size={22} />
+      <div className="w-12 h-12 rounded-lg border border-slate-100 bg-white flex items-center justify-center shrink-0">
+        <BrandMark icon={link.icon} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="font-bold text-slate-900 leading-tight">{link.title}</div>
