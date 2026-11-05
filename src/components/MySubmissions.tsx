@@ -48,6 +48,11 @@ const parseSafeDate = (dateStr: string) => {
     return null;
 };
 
+const PROCESSING_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSfBxfw6JyPZwY8P6fCSL99uPqU1qPRizManL859ZJPsZXkmiA/viewform';
+/** Opens the order processing form with Department, salesperson name and OPF number already filled in. */
+const processingLink = (name: string, opf: string) =>
+  `${PROCESSING_FORM}?usp=pp_url&entry.1790622596=Sales&entry.423472441=${encodeURIComponent(name)}&entry.312889422=${encodeURIComponent(opf)}`;
+
 export const MySubmissions = ({ data }: { data: OPFData[] }) => {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -490,7 +495,7 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
 
       <div className="luxury-card overflow-hidden">
         <div className="overflow-x-auto no-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
+          <table className="w-full text-left border-collapse min-w-[1150px]">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Date & OPF</th>
@@ -498,6 +503,7 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Product Info</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Location</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Financials</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Order processing</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -538,10 +544,16 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
                     <div className="font-bold text-slate-900">{formatCurrency(item.grossSales)}</div>
                     <div className="text-[10px] text-emerald-500 font-bold">Qty: {item.quantity}</div>
                   </td>
+                  <td className="px-6 py-4">
+                    <a href={processingLink(item.salesperson, item.opf)} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center justify-center h-10 px-4 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 whitespace-nowrap">
+                      Send for processing
+                    </a>
+                  </td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-20 text-center text-slate-400 font-medium">No submissions found matching your search</td>
+                  <td colSpan={6} className="px-6 py-20 text-center text-slate-400 font-medium">No submissions found matching your search</td>
                 </tr>
               )}
             </tbody>
