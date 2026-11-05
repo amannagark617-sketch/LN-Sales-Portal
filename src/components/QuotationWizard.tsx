@@ -71,9 +71,9 @@ const fmt0 = (n: number) => 'Rs. ' + Math.round(n).toLocaleString('en-IN');
 const QUOTE_BRANDS: Brand[] = BRANDS;
 // each brand keeps its own colour so the choice is recognised at a glance
 const BRAND_LOOK: Record<string, { accent: string; tint: string; line: string }> = {
-  'Little Nap': { accent: '#9B7C50', tint: '#FAF6EF', line: 'One of our own ranges, made to order' },
+  'Little Nap': { accent: '#9B7C50', tint: '#FAF6EF', line: 'Little Nap Recliners, with customisation' },
   'La-Z-Boy': { accent: '#00314A', tint: '#F0F5F8', line: 'Exclusive partner of La-Z-Boy in India' },
-  'Smart Comfort': { accent: '#2F6F73', tint: '#F0F6F6', line: 'The Smart Comfort range' }
+  'Smart Comfort': { accent: '#2F6F73', tint: '#F0F6F6', line: 'A Little Nap range' }
 };
 const STEPS = ['Brand', 'Customer', 'Items', 'Pricing', 'Review'] as const;
 const STEP_HELP = [
@@ -244,6 +244,10 @@ export function QuotationWizard({ salesperson }: Props) {
         if (saved) return setLogo(await shrinkImage(saved));
         const r = await fetch('/api/logo');
         if (r.ok) { const d = await r.json(); if (d.base64) setLogo(await shrinkImage(d.base64)); }
+      } catch { /* fall back to the logo bundled with the app */ }
+      try {
+        const r = await fetch('/assets/littlenap-logo.png');
+        if (r.ok) { const blob = await r.blob(); const fr = new FileReader(); fr.onload = () => setLogo(cur => cur || String(fr.result)); fr.readAsDataURL(blob); }
       } catch { /* logo is optional */ }
     })();
   }, []);
@@ -582,10 +586,14 @@ export function QuotationWizard({ salesperson }: Props) {
                           <div className="h-24 shrink-0 flex items-center justify-center px-6" style={{ background: look.tint }}>
                             {b === 'La-Z-Boy' ? (
                               <img src="/assets/lazboy-logo.png" alt="La-Z-Boy" className="max-h-12 w-auto" />
-                            ) : b === 'Little Nap' && logo ? (
-                              <img src={logo} alt="Little Nap" className="max-h-14 w-auto" />
+                            ) : b === 'Little Nap' ? (
+                              <img src="/assets/littlenap-logo.png" alt="Little Nap" className="max-h-16 w-auto" />
                             ) : (
-                              <span className="text-2xl font-bold tracking-tight" style={{ color: look.accent }}>{b === 'Smart Comfort' ? 'Smart Comfort' : b}</span>
+                              <div className="flex items-center gap-4">
+                                <img src="/assets/littlenap-logo.png" alt="Little Nap" className="h-14 w-auto" />
+                                <span className="w-px h-10 bg-slate-300" />
+                                <span className="text-lg font-bold leading-tight" style={{ color: look.accent }}>Smart<br />Comfort</span>
+                              </div>
                             )}
                           </div>
                           {on && (
