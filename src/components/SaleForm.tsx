@@ -35,7 +35,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, className }: 
       </div>
       
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-white/80 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] overflow-hidden">
+        <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] overflow-hidden">
           <div className="p-2 border-b border-slate-100">
             <input 
               type="text" 
