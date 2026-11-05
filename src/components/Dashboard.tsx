@@ -80,9 +80,11 @@ export const Dashboard = ({
   user?: any;
   salespersons?: any[];
 }) => {
-  const [startDate, setStartDate] = useState('2025-04-01');
-  const [endDate, setEndDate] = useState(format(endOfDay(new Date()), 'yyyy-MM-dd'));
-  const [activeFilter, setActiveFilter] = useState('allTime');
+  // opens on the current financial year (April to March)
+  const fyStart = (() => { const n = new Date(); return n.getMonth() < 3 ? n.getFullYear() - 1 : n.getFullYear(); })();
+  const [startDate, setStartDate] = useState(format(new Date(fyStart, 3, 1), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(new Date(fyStart + 1, 2, 31), 'yyyy-MM-dd'));
+  const [activeFilter, setActiveFilter] = useState('thisYear');
   const [breakdownKey, setBreakdownKey] = useState<keyof OPFData>('segment');
 
   const [selectedSalesperson, setSelectedSalesperson] = useState<string>('all');
