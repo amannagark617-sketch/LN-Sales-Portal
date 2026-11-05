@@ -920,7 +920,7 @@ async function startServer() {
         headers: {
           'Content-Type': 'text/plain'
         },
-        body: JSON.stringify(req.body)
+        body: JSON.stringify({ ...req.body, showroom: currentUser.showroom || '', employeeId: currentUser.id || '' })
       });
 
       // Clear the OPF Data cache so that next polling request fetches fresh reports
