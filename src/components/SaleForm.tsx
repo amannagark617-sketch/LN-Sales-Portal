@@ -149,13 +149,13 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
       region: salesperson.region,
       date: getIstDateString(),
       visitType: 'Showroom',
-      segment: validationData.segments[0],
-      leadSource: validationData.leadSources[0],
-      brandName: validationData.brands[0],
-      model: validationData.models[0],
-      functionality: validationData.functionalities[0],
-      category: validationData.categories[0],
-      crrNbd: validationData.crrNbds[0],
+      segment: '',
+      leadSource: '',
+      brandName: '',
+      model: '',
+      functionality: '',
+      category: '',
+      crrNbd: '',
       typeOfBusiness: validationData.typesOfBusiness[0],
       state: '',
       opfNumber: '',
@@ -444,9 +444,16 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
             </div>
             <div>
             <label className={labelClass}>Segment</label>
-            <select {...register('segment')} className={inputClass}>
-                {validationData.segments.map((s, i) => <option key={`${s}-${i}`} value={s}>{s}</option>)}
-            </select>
+            <div id="segment" data-fieldname="segment">
+              <SearchableSelect
+                  options={validationData.segments}
+                  value={watch('segment') || ''}
+                  onChange={(val) => setValue('segment', val, { shouldValidate: true })}
+                  placeholder="Select Segment"
+                  className={`${inputClass} ${errors.segment ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+              />
+            </div>
+            {errors.segment && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.segment.message}</p>}
             </div>
             {selectedSegment?.toLowerCase() === 'franchise' && (
             <div>
@@ -459,9 +466,16 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
             )}
             <div>
             <label className={labelClass}>Lead Source</label>
-            <select {...register('leadSource')} className={inputClass}>
-                {validationData.leadSources.map((s, i) => <option key={`${s}-${i}`} value={s}>{s}</option>)}
-            </select>
+            <div id="leadSource" data-fieldname="leadSource">
+              <SearchableSelect
+                  options={validationData.leadSources}
+                  value={watch('leadSource') || ''}
+                  onChange={(val) => setValue('leadSource', val, { shouldValidate: true })}
+                  placeholder="Select Lead Source"
+                  className={`${inputClass} ${errors.leadSource ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+              />
+            </div>
+            {errors.leadSource && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.leadSource.message}</p>}
             </div>
         </div>
       </div>
@@ -547,9 +561,16 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
             <label className={labelClass}>Brand</label>
-            <select {...register('brandName')} className={inputClass}>
-                {validationData.brands.map((s, i) => <option key={`${s}-${i}`} value={s}>{s}</option>)}
-            </select>
+            <div id="brandName" data-fieldname="brandName">
+              <SearchableSelect
+                  options={validationData.brands}
+                  value={watch('brandName') || ''}
+                  onChange={(val) => setValue('brandName', val, { shouldValidate: true })}
+                  placeholder="Select Brand"
+                  className={`${inputClass} ${errors.brandName ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+              />
+            </div>
+            {errors.brandName && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.brandName.message}</p>}
             </div>
             <div>
             <label className={labelClass}>Model</label>
@@ -558,7 +579,7 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
                   options={validationData.models} 
                   value={watch('model')} 
                   onChange={(val) => setValue('model', val, { shouldValidate: true })} 
-                  placeholder="Search Model"
+                  placeholder="Select Model"
                   className={`${inputClass} ${errors.model ? 'border-red-300 ring-1 ring-red-300' : ''}`}
               />
             </div>
@@ -566,21 +587,42 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
             </div>
             <div>
             <label className={labelClass}>Functionality</label>
-            <select {...register('functionality')} className={inputClass}>
-                {validationData.functionalities.map((s, i) => <option key={`${s}-${i}`} value={s}>{s}</option>)}
-            </select>
+            <div id="functionality" data-fieldname="functionality">
+              <SearchableSelect
+                  options={validationData.functionalities}
+                  value={watch('functionality') || ''}
+                  onChange={(val) => setValue('functionality', val, { shouldValidate: true })}
+                  placeholder="Select Functionality"
+                  className={`${inputClass} ${errors.functionality ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+              />
+            </div>
+            {errors.functionality && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.functionality.message}</p>}
             </div>
             <div>
             <label className={labelClass}>Category</label>
-            <select {...register('category')} className={inputClass}>
-                {validationData.categories.map((s, i) => <option key={`${s}-${i}`} value={s}>{s}</option>)}
-            </select>
+            <div id="category" data-fieldname="category">
+              <SearchableSelect
+                  options={validationData.categories}
+                  value={watch('category') || ''}
+                  onChange={(val) => setValue('category', val, { shouldValidate: true })}
+                  placeholder="Select Category"
+                  className={`${inputClass} ${errors.category ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+              />
+            </div>
+            {errors.category && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.category.message}</p>}
             </div>
             <div>
             <label className={labelClass}>CRR/NBD</label>
-            <select {...register('crrNbd')} className={inputClass}>
-                {validationData.crrNbds.map((s, i) => <option key={`${s}-${i}`} value={s}>{s}</option>)}
-            </select>
+            <div id="crrNbd" data-fieldname="crrNbd">
+              <SearchableSelect
+                  options={validationData.crrNbds}
+                  value={watch('crrNbd') || ''}
+                  onChange={(val) => setValue('crrNbd', val, { shouldValidate: true })}
+                  placeholder="Select CRR/NBD"
+                  className={`${inputClass} ${errors.crrNbd ? 'border-red-300 ring-1 ring-red-300' : ''}`}
+              />
+            </div>
+            {errors.crrNbd && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.crrNbd.message}</p>}
             </div>
             <div>
               <label className={labelClass}>Type of Business</label>
