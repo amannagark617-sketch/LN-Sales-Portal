@@ -41,13 +41,14 @@ export const loginSalesperson = async (id: string, password: string): Promise<Sa
 };
 
 export const fetchReadyStock = async (refresh = false): Promise<import('../stock/stock').StockPayload> => {
-  const response = await fetch(`/api/ready-stock${refresh ? '?refresh=1' : ''}`, { headers: getAuthHeaders() });
+  // refresh: Refresh button. Otherwise this is the first load after the app was opened.
+  const response = await fetch(`/api/ready-stock?${refresh ? 'refresh=1' : 'open=1'}`, { headers: getAuthHeaders() });
   if (!response.ok) throw new Error('Could not load the ready stock');
   return await response.json();
 };
 
 export const fetchOrderStatus = async (opfs: string[], refresh = false): Promise<{ statuses: Record<string, import('../orders/status').OrderHistory>; loadedAt: number }> => {
-  const response = await fetch('/api/order-status', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ opfs, refresh }) });
+  const response = await fetch('/api/order-status', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ opfs, refresh, open: !refresh }) });
   if (!response.ok) {
     let msg = 'Could not read the order status';
     try { const j = await response.json(); if (j?.error) msg = j.error; } catch (_) {}

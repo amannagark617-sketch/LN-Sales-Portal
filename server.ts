@@ -642,7 +642,10 @@ const STOCK_TABS: Record<StockTab, { name: string; parse: (rows: string[][]) => 
   motion: { name: 'Linea & Puls details', parse: parseMotion }
 };
 let stockCache: { data: StockPayload; timestamp: number } | null = null;
-const STOCK_TTL = 30000;
+// Stock and order status are only re-read from Google when someone presses Refresh, opens the app, or the copy is 5 minutes old.
+const STOCK_TTL = 300000;
+const OPEN_TTL = 60000;
+const REFRESH_TTL = 5000;
 
 async function loadStockTab(tab: StockTab): Promise<StockTabData> {
   try {
@@ -658,10 +661,10 @@ async function loadStockTab(tab: StockTab): Promise<StockTabData> {
   }
 }
 
-async function getStock(force: boolean): Promise<StockPayload> {
+async function getStock(mode: 'refresh' | 'open' | 'cached'): Promise<StockPayload> {
   const now = Date.now();
   // A forced refresh reads the sheet again, but several presses within 5 seconds share one read.
-  const ttl = force ? 5000 : STOCK_TTL;
+  const ttl = mode === 'refresh' ? REFRESH_TTL : mode === 'open' ? OPEN_TTL : STOCK_TTL;
   if (stockCache && now - stockCache.timestamp < ttl) return stockCache.data;
   const [littlenap, lazboy, motion] = await Promise.all([loadStockTab('littlenap'), loadStockTab('lazboy'), loadStockTab('motion')]);
   const data: StockPayload = { tabs: { littlenap, lazboy, motion }, loadedAt: now };
@@ -674,9 +677,9 @@ async function getStock(force: boolean): Promise<StockPayload> {
 const ORDERS_SHEET_ID = process.env.ORDERS_SHEET_ID || '1ylXuhjwnuCKbDPm_rzZmufojQ0ZxatFc8pn8leS0qF8';
 let orderCache: { data: Record<string, OrderHistory>; timestamp: number } | null = null;
 
-async function getOrderStatuses(force: boolean): Promise<Record<string, OrderHistory>> {
+async function getOrderStatuses(mode: 'refresh' | 'open' | 'cached'): Promise<Record<string, OrderHistory>> {
   const now = Date.now();
-  const ttl = force ? 5000 : 60000;
+  const ttl = mode === 'refresh' ? REFRESH_TTL : mode === 'open' ? OPEN_TTL : STOCK_TTL;
   if (orderCache && now - orderCache.timestamp < ttl) return orderCache.data;
   // only the six columns we need: OPF Number, Timestamp, Planning, Actual, Status, Remarks
   const q = encodeURIComponent('select D,B,G,H,I,J,K,M,N,O,P');
@@ -779,7 +782,7 @@ async function startServer() {
     try {
       const currentUser = await authenticate(req);
       if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
-      const all = await getOrderStatuses(req.body?.refresh === true);
+      const all = await getOrderStatuses(req.body?.refresh === true ? 'refresh' : req.body?.open === true ? 'open' : 'cached');
       const wanted: string[] = Array.isArray(req.body?.opfs) ? req.body.opfs.slice(0, 3000) : [];
       const statuses: Record<string, OrderHistory> = {};
       for (const o of wanted) { const k = normOpf(String(o)); if (all[k]) statuses[k] = all[k]; }
@@ -794,7 +797,8 @@ async function startServer() {
     try {
       const currentUser = await authenticate(req);
       if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
-      res.json(await getStock(String(req.query.refresh || '') === '1'));
+      const q = req.query;
+      res.json(await getStock(String(q.refresh || '') === '1' ? 'refresh' : String(q.open || '') === '1' ? 'open' : 'cached'));
     } catch (err: any) {
       console.error('API /api/ready-stock error:', err);
       res.status(500).json({ error: 'Could not load the ready stock.' });

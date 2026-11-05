@@ -27,9 +27,13 @@ function PieceImage({ src, name, className, width = 400 }: { src: string; name: 
   return <img src={sized(src, width)} alt={name} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBad(true)} className={`${className} object-cover bg-slate-50`} />;
 }
 
+// Kept for as long as the app stays open, so moving between tabs never reads the sheet again.
+// Closing and reopening the app starts empty and loads fresh data.
+let stockStore: StockPayload | null = null;
+
 export function ReadyStock({ salespersonName }: { salespersonName: string }) {
-  const [data, setData] = useState<StockPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<StockPayload | null>(stockStore);
+  const [loading, setLoading] = useState(!stockStore);
   const [err, setErr] = useState('');
   const [now, setNow] = useState(Date.now());
   const [tab, setTab] = useState<StockTab>('littlenap');
@@ -42,11 +46,11 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
 
   const load = useCallback(async (force: boolean) => {
     setLoading(true); setErr('');
-    try { setData(await fetchReadyStock(force)); } catch (e: any) { setErr(e.message || 'Could not load the stock'); }
+    try { const d = await fetchReadyStock(force); stockStore = d; setData(d); } catch (e: any) { setErr(e.message || 'Could not load the stock'); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(false); }, [load]);
+  useEffect(() => { if (!stockStore) load(false); }, [load]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
   useEffect(() => { setKind(''); setMaterial(''); setQ(''); }, [tab]);
 

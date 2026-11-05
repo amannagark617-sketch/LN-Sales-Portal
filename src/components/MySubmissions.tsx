@@ -55,6 +55,9 @@ const PROCESSING_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSfBxfw6JyPZwY8
 const processingLink = (name: string, opf: string) =>
   `${PROCESSING_FORM}?usp=pp_url&entry.1790622596=Sales&entry.423472441=${encodeURIComponent(name)}&entry.312889422=${encodeURIComponent(opf)}`;
 
+// Kept for as long as the app stays open; reopening the app loads fresh status.
+let statusStore: { statuses: Record<string, OrderHistory>; at: number } | null = null;
+
 export const MySubmissions = ({ data }: { data: OPFData[] }) => {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -70,21 +73,21 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
   const [crrNbdFilter, setCrrNbdFilter] = useState('');
   const [typeOfBusinessFilter, setTypeOfBusinessFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [statuses, setStatuses] = useState<Record<string, OrderHistory>>({});
+  const [statuses, setStatuses] = useState<Record<string, OrderHistory>>(statusStore?.statuses || {});
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
-  const [statusAt, setStatusAt] = useState<number | null>(null);
+  const [statusAt, setStatusAt] = useState<number | null>(statusStore?.at ?? null);
 
   const loadStatus = async (force: boolean) => {
     setStatusLoading(true); setStatusError('');
     try {
       const opfs = Array.from(new Set(data.map(d => d.opf).filter(o => o && !o.startsWith('NSL')))).slice(0, 3000);
       const r = await fetchOrderStatus(opfs, force);
-      setStatuses(r.statuses); setStatusAt(r.loadedAt);
+      statusStore = { statuses: r.statuses, at: r.loadedAt }; setStatuses(r.statuses); setStatusAt(r.loadedAt);
     } catch (e: any) { setStatusError(e.message || 'Could not read the order status'); }
     finally { setStatusLoading(false); }
   };
-  useEffect(() => { if (data.length) loadStatus(false); }, [data.length]);
+  useEffect(() => { if (data.length && !statusStore) loadStatus(false); }, [data.length]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
