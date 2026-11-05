@@ -15,6 +15,8 @@ export interface StockItem {
   shade: string;
   qty: number;
   image: string;
+  /** Google Drive file id behind the photo link; the file can be a PDF with several pages */
+  fileId: string;
   code: string;
   note: string;
   price: number;
@@ -52,6 +54,12 @@ export function imageUrl(cell: string): string {
     return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w800` : '';
   }
   return url;
+}
+
+export function driveFileId(cell: string): string {
+  const m = clean(cell).match(/https?:\/\/drive\.google\.com[^\s,"]*/);
+  if (!m) return '';
+  return ((m[0].match(/\/d\/([\w-]+)/) || m[0].match(/[?&]id=([\w-]+)/) || [])[1]) || '';
 }
 
 const kindOf = (s: string): StockItem['kind'] => {
@@ -112,7 +120,7 @@ export function parseLittleNap(rows: string[][]): StockItem[] {
       id: `ln-${k}`, tab: 'littlenap', model: titleCase(model), title: titleCase(fun) || 'Recliner',
       details: [desc && titleCase(desc), dim && titleCase(dim)].filter(Boolean) as string[],
       kind: kindOf(fun), functionality: titleCase(fun), material: materialOf(up), upholstery: titleCase(up),
-      shade: titleCase(clean(r[col.shade])), qty, image: imageUrl(r[col.photo]), code: clean(r[col.code]), note: '', price: 0
+      shade: titleCase(clean(r[col.shade])), qty, image: imageUrl(r[col.photo]), fileId: driveFileId(r[col.photo]), code: clean(r[col.code]), note: '', price: 0
     });
   });
   return out;
@@ -135,7 +143,7 @@ export function parseLaZBoy(rows: string[][]): StockItem[] {
       id: `lz-${k}`, tab: 'lazboy', model: titleCase(model), title: titleCase(clean(r[iDesc])) || 'Recliner',
       details: [boxes && `${boxes} box${num(boxes) === 1 ? '' : 'es'}`].filter(Boolean) as string[],
       kind: kindOf(fun), functionality: titleCase(fun), material: materialOf(up), upholstery: up,
-      shade: titleCase(clean(r[iColour])), qty, image: imageUrl(r[iImg]), code: [clean(r[iCode]), clean(r[iCover])].filter(Boolean).join(' · '),
+      shade: titleCase(clean(r[iColour])), qty, image: imageUrl(r[iImg]), fileId: driveFileId(r[iImg]), code: [clean(r[iCode]), clean(r[iCover])].filter(Boolean).join(' · '),
       note: clean(r[iHold]), price: num(r[iPrice])
     });
   });
@@ -157,7 +165,7 @@ export function parseMotion(rows: string[][]): StockItem[] {
       id: `mo-${k}`, tab: 'motion', model: titleCase(model), title: titleCase(first) || 'Motion sofa',
       details: lines.slice(1).map(x => x.replace(/^\(|\)$/g, '')),
       kind: kindOf(first), functionality: kindOf(first), material: materialOf(clean(r[iU])), upholstery: titleCase(clean(r[iU])),
-      shade: titleCase(clean(r[iC])), qty, image: imageUrl(r[iImg]), code: '', note: iRem >= 0 ? clean(r[iRem]) : '', price: 0
+      shade: titleCase(clean(r[iC])), qty, image: imageUrl(r[iImg]), fileId: driveFileId(r[iImg]), code: '', note: iRem >= 0 ? clean(r[iRem]) : '', price: 0
     });
   });
   return out;

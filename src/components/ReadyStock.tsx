@@ -38,6 +38,7 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
   const [material, setMaterial] = useState('');
   const [sort, setSort] = useState<'stock' | 'az'>('stock');
   const [open, setOpen] = useState<Group | null>(null);
+  const [viewer, setViewer] = useState<{ id: string; title: string } | null>(null);
 
   const load = useCallback(async (force: boolean) => {
     setLoading(true); setErr('');
@@ -187,6 +188,19 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
         })}
       </div>
 
+      {viewer && (
+        <div className="fixed inset-0 z-[60] bg-white flex flex-col">
+          <div className="flex items-center justify-between gap-3 p-3 border-b border-slate-200">
+            <div className="min-w-0 text-sm font-bold text-slate-900 truncate">{viewer.title}</div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a href={`https://drive.google.com/file/d/${viewer.id}/view`} target="_blank" rel="noreferrer" className="h-10 px-3 rounded-xl border border-slate-300 text-sm font-bold text-slate-800 flex items-center">Open in Drive</a>
+              <button aria-label="Close" onClick={() => setViewer(null)} className="h-10 w-10 flex items-center justify-center text-slate-600 hover:text-slate-900"><X size={22} /></button>
+            </div>
+          </div>
+          <iframe title="Details" src={`https://drive.google.com/file/d/${viewer.id}/preview`} className="flex-1 w-full border-0" allow="autoplay" />
+        </div>
+      )}
+
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-6" onClick={() => setOpen(null)}>
           <div className="bg-white w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl" onClick={e => e.stopPropagation()}>
@@ -210,6 +224,12 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
                     </div>
                     {i.details.map((d, k) => <div key={k} className="text-xs text-slate-500 mt-1">{d}</div>)}
                     {i.code && <div className="text-xs text-slate-400 mt-1">{i.code}</div>}
+                    {i.fileId && (
+                      <button onClick={() => setViewer({ id: i.fileId, title: `${i.model} · ${[i.upholstery, i.shade].filter(Boolean).join(' · ')}` })}
+                        className="mt-3 h-10 px-4 rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-800 hover:border-slate-900">
+                        View all pages and details
+                      </button>
+                    )}
                     <div className="mt-3 flex items-center gap-3 flex-wrap">
                       <span className="text-sm"><span className="text-xl font-bold text-slate-900">{i.qty}</span> ready</span>
                       {i.qty === 1 && <span className="text-xs font-bold text-amber-700">Last piece</span>}
