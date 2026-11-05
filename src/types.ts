@@ -8,6 +8,8 @@ export interface Salesperson {
   manager?: string;
   isManager?: boolean;
   managerAccess?: string;
+  mobile?: string;
+  email?: string;
 }
 
 export interface SaleReport {

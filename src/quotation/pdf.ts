@@ -125,7 +125,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
 
   heading(`${isPI ? 'PI' : 'QUOTATION'} DETAILS`);
   kv('Date:', m.date, 15); kv('Prepared by:', m.salespersonName, 112); y += 4.5;
-  kv('Number:', m.number, 15); kv('Employee No:', m.salespersonId || 'N/A', 112); y += 4.5;
+  kv('Number:', m.number, 15); kv('Employee ID:', m.salespersonId || 'N/A', 112); y += 4.5;
   if (p.contact?.phone || p.contact?.email) {
     if (p.contact.phone) kv('Contact:', p.contact.phone, 112);
     y += 4.5;

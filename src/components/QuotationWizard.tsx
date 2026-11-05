@@ -163,8 +163,8 @@ export function QuotationWizard({ salesperson }: Props) {
   const [installation, setInstallation] = useState(0);
   const [advance, setAdvance] = useState(0);
   const [showBank, setShowBank] = useState(true);
-  const [contactPhone, setContactPhone] = useState(() => { try { return localStorage.getItem(`ln_contact_phone_${salesperson.id}`) || ''; } catch { return ''; } });
-  const [contactEmail, setContactEmail] = useState(() => { try { return localStorage.getItem(`ln_contact_email_${salesperson.id}`) || ''; } catch { return ''; } });
+  const [contactPhone, setContactPhone] = useState(() => { try { return salesperson.mobile || localStorage.getItem(`ln_contact_phone_${salesperson.id}`) || ''; } catch { return salesperson.mobile || ''; } });
+  const [contactEmail, setContactEmail] = useState(() => { try { return salesperson.email || localStorage.getItem(`ln_contact_email_${salesperson.id}`) || ''; } catch { return ''; } });
   useEffect(() => { try { localStorage.setItem(`ln_contact_phone_${salesperson.id}`, contactPhone); localStorage.setItem(`ln_contact_email_${salesperson.id}`, contactEmail); } catch { /* ignore */ } }, [contactPhone, contactEmail, salesperson.id]);
   const [custGstin, setCustGstin] = useState('');
   const [discount, setDiscount] = useState(emptyDiscount());
@@ -570,7 +570,7 @@ export function QuotationWizard({ salesperson }: Props) {
                   </div>
                   <div className="sm:col-span-2 border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
                     <div><label className={label}>Prepared by</label><input className={`${field} bg-slate-50`} value={salesperson.name} readOnly /></div>
-                    <div><label className={label}>Employee number</label><input className={field} value={employeeNo} onChange={e => setEmployeeNo(e.target.value)} /></div>
+                    <div><label className={label}>Employee ID</label><input className={field} value={employeeNo} onChange={e => setEmployeeNo(e.target.value)} /></div>
                     <div><label className={label}>Your contact number</label><input className={field} inputMode="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Shown in the header, optional" /></div>
                     <div><label className={label}>Your email</label><input className={field} type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="Shown in the header, optional" /></div>
                   </div>

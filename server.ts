@@ -80,6 +80,8 @@ async function getSalespersons(): Promise<any[]> {
       manager: col5,
       isManager: col5.toLowerCase() === 'manager',
       managerAccess: col6,
+      mobile: cleanStr(values[7]),
+      email: cleanStr(values[8]),
     };
   });
 }
