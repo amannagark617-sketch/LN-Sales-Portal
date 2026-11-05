@@ -2,6 +2,8 @@ export type OrderState = 'Pending' | 'Done' | 'On hold' | 'Rejected';
 
 export interface OrderStatus {
   status: OrderState;
+  /** when the salesperson submitted the form (Timestamp column) */
+  sent: string;
   /** time the operations team planned to finish it */
   planned: string;
   /** time they actually finished it */
@@ -32,7 +34,7 @@ export function parseOrderRows(rows: string[][]): Record<string, OrderStatus> {
     const key = normOpf(r[0]);
     const state = stateOf(r[4]);
     if (!key || !state) continue; // skips the header row and blank rows
-    out[key] = { status: state, planned: String(r[2] || '').trim(), actual: String(r[3] || '').trim(), remarks: String(r[5] || '').trim() };
+    out[key] = { status: state, sent: String(r[1] || '').trim(), planned: String(r[2] || '').trim(), actual: String(r[3] || '').trim(), remarks: String(r[5] || '').trim() };
   }
   return out;
 }

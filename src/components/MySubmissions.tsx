@@ -574,15 +574,15 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
                     {(() => {
                       const st = statuses[normOpf(item.opf)];
                       const tone = !st ? '' : st.status === 'Done' ? 'text-emerald-700 border-emerald-500 bg-emerald-50' : st.status === 'Rejected' ? 'text-red-700 border-red-500 bg-red-50' : 'text-amber-700 border-amber-500 bg-amber-50';
-                      const shown = (s: string) => { const d = parseSafeDate(s); return d ? format(d, 'dd MMM, h:mm a') : s; };
                       const remark = st ? usefulRemark(st) : '';
                       return (
                         <div className="space-y-2">
                           {st && (
                             <div className={`border-l-4 px-3 py-2 text-xs ${tone}`}>
                               <div className="font-bold text-sm">{st.status}</div>
-                              {st.status === 'Done' && st.actual && <div>Completed {shown(st.actual)}</div>}
-                              {st.status === 'Pending' && st.planned && <div>Planned by {shown(st.planned)}</div>}
+                              {st.sent && <div>Sent: {st.sent}</div>}
+                              {st.planned && <div>Planned: {st.planned}</div>}
+                              {st.actual && <div>Actual: {st.actual}</div>}
                               {remark && <div className="mt-1 font-medium">{remark}</div>}
                             </div>
                           )}
