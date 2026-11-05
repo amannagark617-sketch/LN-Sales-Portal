@@ -645,7 +645,7 @@ const STOCK_TTL = 30000;
 
 async function loadStockTab(tab: StockTab): Promise<StockTabData> {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${STOCK_SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(STOCK_TABS[tab].name)}`;
+    const url = `https://docs.google.com/spreadsheets/d/${STOCK_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(STOCK_TABS[tab].name)}`;
     const r = await fetch(url);
     const text = await r.text();
     if (!r.ok || /^\s*</.test(text)) {
