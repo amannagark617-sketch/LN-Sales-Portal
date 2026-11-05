@@ -281,13 +281,18 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
     loadOpf(true);
 
     // Poll every 5 seconds so the sequence stays in real-time sync across multiple concurrent users
+    // Paused while the page is hidden (other tab, minimized, phone locked or another app open)
     const intervalId = setInterval(() => {
+      if (document.hidden) return;
       loadOpf(false);
     }, 5000);
+    const onVisible = () => { if (!document.hidden) loadOpf(false); };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       active = false;
       clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [salesperson.name, selectedVisitType, setValue]);
 

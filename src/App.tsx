@@ -59,10 +59,15 @@ function MainContent() {
   // Poll every 5 seconds if a user is logged in
   useEffect(() => {
     if (user) {
+      // Only while the page is on screen. Hidden tab, minimized window, locked phone or another app on top: no calls.
       const intervalId = setInterval(() => {
+        if (document.hidden) return;
         refreshData(true);
       }, 5000);
-      return () => clearInterval(intervalId);
+      // One fetch the moment the person comes back, so the data is current straight away
+      const onVisible = () => { if (!document.hidden) refreshData(true); };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => { clearInterval(intervalId); document.removeEventListener('visibilitychange', onVisible); };
     }
   }, [user]);
 
