@@ -1,5 +1,6 @@
 import express from "express";
 import compression from "compression";
+import { parseLittleNap, parseLaZBoy, parseMotion, StockPayload, StockTab, StockTabData } from "./src/stock/stock";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import {
@@ -632,6 +633,42 @@ async function loadPriceList(): Promise<{ rows: PriceRow[]; terms: TermRow[] }> 
   return { rows, terms };
 }
 
+// ---------- Ready stock (separate Google Sheet) ----------
+const STOCK_SHEET_ID = '1g5fxOgUtB44Wjgej8C7p32xG7ZacgZmaymEMXmIRtAo';
+const STOCK_TABS: Record<StockTab, { name: string; parse: (rows: string[][]) => any[] }> = {
+  littlenap: { name: 'Response Ready Goods', parse: parseLittleNap },
+  lazboy: { name: 'La-Z-Boy Stock', parse: parseLaZBoy },
+  motion: { name: 'Linea & Puls details', parse: parseMotion }
+};
+let stockCache: { data: StockPayload; timestamp: number } | null = null;
+const STOCK_TTL = 30000;
+
+async function loadStockTab(tab: StockTab): Promise<StockTabData> {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${STOCK_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(STOCK_TABS[tab].name)}`;
+    const r = await fetch(url);
+    const text = await r.text();
+    if (!r.ok || /^\s*</.test(text)) {
+      return { items: [], error: 'The stock sheet could not be read. Its sharing must be "Anyone with the link can view".' };
+    }
+    return { items: STOCK_TABS[tab].parse(parseQuotedCSV(text)) };
+  } catch (e: any) {
+    return { items: [], error: e?.message || 'Could not read this tab.' };
+  }
+}
+
+async function getStock(force: boolean): Promise<StockPayload> {
+  const now = Date.now();
+  // A forced refresh reads the sheet again, but several presses within 5 seconds share one read.
+  const ttl = force ? 5000 : STOCK_TTL;
+  if (stockCache && now - stockCache.timestamp < ttl) return stockCache.data;
+  const [littlenap, lazboy, motion] = await Promise.all([loadStockTab('littlenap'), loadStockTab('lazboy'), loadStockTab('motion')]);
+  const data: StockPayload = { tabs: { littlenap, lazboy, motion }, loadedAt: now };
+  // do not keep a result where every tab failed, so the next try reads the sheet again
+  if ([littlenap, lazboy, motion].some(t => !t.error)) stockCache = { data, timestamp: now };
+  return data;
+}
+
 async function getCachedPriceList(force = false) {
   const now = Date.now();
   if (!force && priceListCache && now - priceListCache.timestamp < PRICE_TTL) return priceListCache.data;
@@ -717,6 +754,17 @@ async function startServer() {
   app.use(compression());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  app.get('/api/ready-stock', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
+      res.json(await getStock(String(req.query.refresh || '') === '1'));
+    } catch (err: any) {
+      console.error('API /api/ready-stock error:', err);
+      res.status(500).json({ error: 'Could not load the ready stock.' });
+    }
+  });
 
   // Manual refresh of the display-only caches. Ignored if refreshed in the last 10 seconds.
   let lastManualRefresh = 0;

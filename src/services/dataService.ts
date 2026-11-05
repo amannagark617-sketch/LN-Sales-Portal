@@ -40,6 +40,12 @@ export const loginSalesperson = async (id: string, password: string): Promise<Sa
   return { ...user, password };
 };
 
+export const fetchReadyStock = async (refresh = false): Promise<import('../stock/stock').StockPayload> => {
+  const response = await fetch(`/api/ready-stock${refresh ? '?refresh=1' : ''}`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error('Could not load the ready stock');
+  return await response.json();
+};
+
 export const refreshServerData = async (): Promise<void> => {
   await fetch('/api/refresh-data', { method: 'POST', headers: getAuthHeaders() });
 };
