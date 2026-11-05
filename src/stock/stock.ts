@@ -87,21 +87,32 @@ const colIdx = (cols: string[], name: string, exact = false) => {
 };
 
 export function parseLittleNap(rows: string[][]): StockItem[] {
-  const h = findHeader(rows, ['model', 'qty']); if (!h) throw new Error('Could not find the header row (MODEL, QTY.) in the Response Ready Goods tab.');
-  const c = (n: string) => colIdx(h.cols, n);
-  const [iM, iF, iU, iS, iP, iD, iDim, iQ, iC] = ['model', 'functionality', 'upholstery type', 'upholstery code', 'photos', 'description', 'dimensions', 'qty', 'code'].map(c);
+  // Columns of the Response Ready Goods tab, used when Google does not hand over a readable header row.
+  const POS = { code: 3, model: 4, fun: 5, up: 6, shade: 7, photo: 8, desc: 9, dim: 10, qty: 11 };
+  const h = findHeader(rows, ['model']);
+  let col = { ...POS };
+  let start = 0;
+  if (h) {
+    const c = (n: string, d: number) => { const i = colIdx(h.cols, n); return i >= 0 ? i : d; };
+    col = { code: c('code', POS.code), model: c('model', POS.model), fun: c('functionality', POS.fun), up: c('upholstery type', POS.up),
+      shade: c('upholstery code', POS.shade), photo: c('photos', POS.photo), desc: c('description', POS.desc), dim: c('dimensions', POS.dim), qty: -1 };
+    // the quantity header can come through as "70 QTY." or similar, so look for any header containing QTY
+    const q = h.cols.findIndex(x => x.includes('qty') || x.includes('quantity'));
+    col.qty = q >= 0 ? q : POS.qty;
+    start = h.at + 1;
+  }
   const out: StockItem[] = [];
-  rows.slice(h.at + 1).forEach((r, k) => {
-    const model = clean(r[iM]); const qty = num(r[iQ]);
-    if (!model || qty <= 0) return;
-    const fun = clean(r[iF]); const up = clean(r[iU]);
-    const desc = clean(r[iD]).replace(/\s{3,}/g, ' ');
-    const dim = clean(r[iDim]).replace(/\s*,\s*$/, '');
+  rows.slice(start).forEach((r, k) => {
+    const model = clean(r[col.model]); const qty = num(r[col.qty]);
+    if (!model || qty <= 0 || norm(model) === 'model') return;
+    const fun = clean(r[col.fun]); const up = clean(r[col.up]);
+    const desc = clean(r[col.desc]).replace(/\s{3,}/g, ' ');
+    const dim = clean(r[col.dim]).replace(/\s*,\s*$/, '');
     out.push({
       id: `ln-${k}`, tab: 'littlenap', model: titleCase(model), title: titleCase(fun) || 'Recliner',
       details: [desc && titleCase(desc), dim && titleCase(dim)].filter(Boolean) as string[],
       kind: kindOf(fun), functionality: titleCase(fun), material: materialOf(up), upholstery: titleCase(up),
-      shade: titleCase(clean(r[iS])), qty, image: imageUrl(r[iP]), code: clean(r[iC]), note: '', price: 0
+      shade: titleCase(clean(r[col.shade])), qty, image: imageUrl(r[col.photo]), code: clean(r[col.code]), note: '', price: 0
     });
   });
   return out;
