@@ -46,7 +46,7 @@ export const fetchReadyStock = async (refresh = false): Promise<import('../stock
   return await response.json();
 };
 
-export const fetchOrderStatus = async (opfs: string[], refresh = false): Promise<{ statuses: Record<string, import('../orders/status').OrderStatus>; loadedAt: number }> => {
+export const fetchOrderStatus = async (opfs: string[], refresh = false): Promise<{ statuses: Record<string, import('../orders/status').OrderHistory>; loadedAt: number }> => {
   const response = await fetch('/api/order-status', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ opfs, refresh }) });
   if (!response.ok) {
     let msg = 'Could not read the order status';

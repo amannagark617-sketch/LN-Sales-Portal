@@ -1,6 +1,6 @@
 import express from "express";
 import compression from "compression";
-import { parseOrderRows, normOpf, OrderStatus } from "./src/orders/status";
+import { parseOrderRows, normOpf, OrderHistory } from "./src/orders/status";
 import { parseLittleNap, parseLaZBoy, parseMotion, StockPayload, StockTab, StockTabData } from "./src/stock/stock";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -672,14 +672,14 @@ async function getStock(force: boolean): Promise<StockPayload> {
 
 // ---------- Order processing status (operations sheet, Salesman Dashboard tab) ----------
 const ORDERS_SHEET_ID = process.env.ORDERS_SHEET_ID || '1ylXuhjwnuCKbDPm_rzZmufojQ0ZxatFc8pn8leS0qF8';
-let orderCache: { data: Record<string, OrderStatus>; timestamp: number } | null = null;
+let orderCache: { data: Record<string, OrderHistory>; timestamp: number } | null = null;
 
-async function getOrderStatuses(force: boolean): Promise<Record<string, OrderStatus>> {
+async function getOrderStatuses(force: boolean): Promise<Record<string, OrderHistory>> {
   const now = Date.now();
   const ttl = force ? 5000 : 60000;
   if (orderCache && now - orderCache.timestamp < ttl) return orderCache.data;
   // only the six columns we need: OPF Number, Timestamp, Planning, Actual, Status, Remarks
-  const q = encodeURIComponent('select D,B,M,N,O,P');
+  const q = encodeURIComponent('select D,B,G,H,I,J,K,M,N,O,P');
   const url = `https://docs.google.com/spreadsheets/d/${ORDERS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Salesman Dashboard')}&tq=${q}`;
   const r = await fetch(url);
   const text = await r.text();
@@ -781,7 +781,7 @@ async function startServer() {
       if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
       const all = await getOrderStatuses(req.body?.refresh === true);
       const wanted: string[] = Array.isArray(req.body?.opfs) ? req.body.opfs.slice(0, 3000) : [];
-      const statuses: Record<string, OrderStatus> = {};
+      const statuses: Record<string, OrderHistory> = {};
       for (const o of wanted) { const k = normOpf(String(o)); if (all[k]) statuses[k] = all[k]; }
       res.json({ statuses, loadedAt: Date.now() });
     } catch (err: any) {

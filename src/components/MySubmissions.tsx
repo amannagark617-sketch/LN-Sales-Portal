@@ -5,7 +5,7 @@ import { format, isValid } from 'date-fns';
 import { Search, Download, Filter, ChevronLeft, ChevronRight, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { fetchOrderStatus } from '../services/dataService';
-import { OrderStatus, normOpf, usefulRemark } from '../orders/status';
+import { OrderHistory, normOpf, usefulRemark } from '../orders/status';
 
 const parseSafeDate = (dateStr: string) => {
     if (!dateStr) return null;
@@ -70,7 +70,7 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
   const [crrNbdFilter, setCrrNbdFilter] = useState('');
   const [typeOfBusinessFilter, setTypeOfBusinessFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [statuses, setStatuses] = useState<Record<string, OrderStatus>>({});
+  const [statuses, setStatuses] = useState<Record<string, OrderHistory>>({});
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
   const [statusAt, setStatusAt] = useState<number | null>(null);
@@ -584,6 +584,26 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
                               {st.planned && <div>Planned: {st.planned}</div>}
                               {st.actual && <div>Actual: {st.actual}</div>}
                               {remark && <div className="mt-1 font-medium">{remark}</div>}
+                            </div>
+                          )}
+                          {st && st.submissions.some(x => x.docs.length) && (
+                            <div className="text-xs space-y-2">
+                              {st.submissions.filter(x => x.docs.length).map((sub, idx) => (
+                                /* the first entry is the latest only when the newest submission carries documents */
+                                <div key={idx} className="border border-slate-200 bg-white px-3 py-2">
+                                  <div className={`font-bold mb-1 ${idx === 0 ? 'text-slate-900' : 'text-slate-500'}`}>
+                                    {sub === st.submissions[0] ? 'Latest documents' : idx === 0 ? 'Documents (newest order had none)' : 'Earlier documents'}{sub.sent ? ` · sent ${sub.sent}` : ''}
+                                  </div>
+                                  {sub.docs.map(d => (
+                                    <div key={d.label} className="flex flex-wrap gap-x-2 items-center">
+                                      <span className="text-slate-500">{d.label}:</span>
+                                      {d.links.map((l, k) => (
+                                        <a key={k} href={l} target="_blank" rel="noreferrer" className="text-indigo-700 font-semibold underline">{d.links.length > 1 ? `File ${k + 1}` : 'Open'}</a>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
                             </div>
                           )}
                           {!st && !statusLoading && !statusError && <div className="text-xs text-slate-500">Not sent yet</div>}
