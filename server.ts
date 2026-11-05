@@ -634,7 +634,7 @@ async function loadPriceList(): Promise<{ rows: PriceRow[]; terms: TermRow[] }> 
 }
 
 // ---------- Ready stock (separate Google Sheet) ----------
-const STOCK_SHEET_ID = '1g5fxOgUtB44Wjgej8C7p32xG7ZacgZmaymEMXmIRtAo';
+const STOCK_SHEET_ID = process.env.STOCK_SHEET_ID || '1g5fxOgUtB44Wjgej8C7p32xG7ZacgZmaymEMXmIRtAo';
 const STOCK_TABS: Record<StockTab, { name: string; parse: (rows: string[][]) => any[] }> = {
   littlenap: { name: 'Response Ready Goods', parse: parseLittleNap },
   lazboy: { name: 'La-Z-Boy Stock', parse: parseLaZBoy },

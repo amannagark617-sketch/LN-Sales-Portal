@@ -172,6 +172,12 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
                 <div className="text-base font-bold text-slate-900 leading-tight">{g.model}</div>
                 <div className="text-sm text-slate-500 mt-1">{g.items.length} {g.items.length === 1 ? 'finish' : 'finishes'}</div>
                 <div className="mt-3 text-sm"><span className="text-xl font-bold text-slate-900">{g.qty}</span> <span className="text-slate-600">ready</span></div>
+                {g.items.some(x => x.note) && (
+                  <div className="mt-2 text-xs font-semibold text-red-700 border-l-2 border-red-400 pl-2">
+                    {g.items.filter(x => x.note).slice(0, 2).map(x => <div key={x.id}>{x.note}</div>)}
+                    {g.items.filter(x => x.note).length > 2 && <div>+{g.items.filter(x => x.note).length - 2} more remarks</div>}
+                  </div>
+                )}
               </div>
             </button>
           );
@@ -204,8 +210,8 @@ export function ReadyStock({ salespersonName }: { salespersonName: string }) {
                     <div className="mt-3 flex items-center gap-3 flex-wrap">
                       <span className="text-sm"><span className="text-xl font-bold text-slate-900">{i.qty}</span> ready</span>
                       {i.qty === 1 && <span className="text-xs font-bold text-amber-700">Last piece</span>}
-                      {i.note && <span className="text-xs font-semibold text-red-700">{i.note}</span>}
                     </div>
+                    {i.note && <div className="mt-2 text-sm font-semibold text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{i.note}</div>}
                   </div>
                 </div>
               ))}
