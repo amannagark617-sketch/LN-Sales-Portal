@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { OPFData } from '../types';
 import { format, isValid } from 'date-fns';
-import { Search, Download, Filter, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { Search, Download, Filter, ChevronLeft, ChevronRight, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { fetchOrderStatus } from '../services/dataService';
+import { OrderStatus, normOpf, usefulRemark } from '../orders/status';
 
 const parseSafeDate = (dateStr: string) => {
     if (!dateStr) return null;
@@ -68,6 +70,21 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
   const [crrNbdFilter, setCrrNbdFilter] = useState('');
   const [typeOfBusinessFilter, setTypeOfBusinessFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [statuses, setStatuses] = useState<Record<string, OrderStatus>>({});
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [statusAt, setStatusAt] = useState<number | null>(null);
+
+  const loadStatus = async (force: boolean) => {
+    setStatusLoading(true); setStatusError('');
+    try {
+      const opfs = Array.from(new Set(data.map(d => d.opf).filter(o => o && !o.startsWith('NSL')))).slice(0, 3000);
+      const r = await fetchOrderStatus(opfs, force);
+      setStatuses(r.statuses); setStatusAt(r.loadedAt);
+    } catch (e: any) { setStatusError(e.message || 'Could not read the order status'); }
+    finally { setStatusLoading(false); }
+  };
+  useEffect(() => { if (data.length) loadStatus(false); }, [data.length]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -262,6 +279,15 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
             />
           </div>
           
+          <button
+            onClick={() => loadStatus(true)}
+            disabled={statusLoading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all text-sm font-bold shadow-sm disabled:opacity-60"
+          >
+            <RefreshCw size={16} className={statusLoading ? 'animate-spin' : ''} />
+            <span>Refresh order status</span>
+          </button>
+
           <button 
             onClick={exportToExcel}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all text-sm font-bold shadow-sm"
@@ -545,10 +571,31 @@ export const MySubmissions = ({ data }: { data: OPFData[] }) => {
                     <div className="text-[10px] text-emerald-500 font-bold">Qty: {item.quantity}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <a href={processingLink(item.salesperson, item.opf)} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center justify-center h-10 px-4 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 whitespace-nowrap">
-                      Send for processing
-                    </a>
+                    {(() => {
+                      const st = statuses[normOpf(item.opf)];
+                      const tone = !st ? '' : st.status === 'Done' ? 'text-emerald-700 border-emerald-500 bg-emerald-50' : st.status === 'Rejected' ? 'text-red-700 border-red-500 bg-red-50' : 'text-amber-700 border-amber-500 bg-amber-50';
+                      const shown = (s: string) => { const d = parseSafeDate(s); return d ? format(d, 'dd MMM, h:mm a') : s; };
+                      const remark = st ? usefulRemark(st) : '';
+                      return (
+                        <div className="space-y-2">
+                          {st && (
+                            <div className={`border-l-4 px-3 py-2 text-xs ${tone}`}>
+                              <div className="font-bold text-sm">{st.status}</div>
+                              {st.status === 'Done' && st.actual && <div>Completed {shown(st.actual)}</div>}
+                              {st.status === 'Pending' && st.planned && <div>Planned by {shown(st.planned)}</div>}
+                              {remark && <div className="mt-1 font-medium">{remark}</div>}
+                            </div>
+                          )}
+                          {!st && !statusLoading && !statusError && <div className="text-xs text-slate-500">Not sent yet</div>}
+                          {(!st || st.status === 'Rejected' || st.status === 'On hold') && (
+                            <a href={processingLink(item.salesperson, item.opf)} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center justify-center h-10 px-4 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 whitespace-nowrap">
+                              {st ? 'Send again' : 'Send for processing'}
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                 </tr>
               )) : (

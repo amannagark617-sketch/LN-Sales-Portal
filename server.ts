@@ -1,5 +1,6 @@
 import express from "express";
 import compression from "compression";
+import { parseOrderRows, normOpf, OrderStatus } from "./src/orders/status";
 import { parseLittleNap, parseLaZBoy, parseMotion, StockPayload, StockTab, StockTabData } from "./src/stock/stock";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -669,6 +670,25 @@ async function getStock(force: boolean): Promise<StockPayload> {
   return data;
 }
 
+// ---------- Order processing status (operations sheet, Salesman Dashboard tab) ----------
+const ORDERS_SHEET_ID = process.env.ORDERS_SHEET_ID || '1ylXuhjwnuCKbDPm_rzZmufojQ0ZxatFc8pn8leS0qF8';
+let orderCache: { data: Record<string, OrderStatus>; timestamp: number } | null = null;
+
+async function getOrderStatuses(force: boolean): Promise<Record<string, OrderStatus>> {
+  const now = Date.now();
+  const ttl = force ? 5000 : 60000;
+  if (orderCache && now - orderCache.timestamp < ttl) return orderCache.data;
+  // only the six columns we need: OPF Number, Timestamp, Planning, Actual, Status, Remarks
+  const q = encodeURIComponent('select D,B,M,N,O,P');
+  const url = `https://docs.google.com/spreadsheets/d/${ORDERS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Salesman Dashboard')}&tq=${q}`;
+  const r = await fetch(url);
+  const text = await r.text();
+  if (!r.ok || /^\s*</.test(text)) throw new Error('The operations sheet could not be read. Its sharing must be "Anyone with the link can view".');
+  const data = parseOrderRows(parseQuotedCSV(text));
+  orderCache = { data, timestamp: now };
+  return data;
+}
+
 async function getCachedPriceList(force = false) {
   const now = Date.now();
   if (!force && priceListCache && now - priceListCache.timestamp < PRICE_TTL) return priceListCache.data;
@@ -754,6 +774,21 @@ async function startServer() {
   app.use(compression());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  app.post('/api/order-status', async (req, res) => {
+    try {
+      const currentUser = await authenticate(req);
+      if (!currentUser) return res.status(401).json({ error: 'Unauthorized credentials.' });
+      const all = await getOrderStatuses(req.body?.refresh === true);
+      const wanted: string[] = Array.isArray(req.body?.opfs) ? req.body.opfs.slice(0, 3000) : [];
+      const statuses: Record<string, OrderStatus> = {};
+      for (const o of wanted) { const k = normOpf(String(o)); if (all[k]) statuses[k] = all[k]; }
+      res.json({ statuses, loadedAt: Date.now() });
+    } catch (err: any) {
+      console.error('API /api/order-status error:', err);
+      res.status(502).json({ error: err?.message || 'Could not read the order status.' });
+    }
+  });
 
   app.get('/api/ready-stock', async (req, res) => {
     try {
