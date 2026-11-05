@@ -134,6 +134,22 @@ const DiscountInput = ({ value, onChange }: { value: { mode: 'pct' | 'amt'; valu
 
 interface Props { salesperson: Salesperson }
 
+/** The stored logo can be 1600px wide, which made every PDF about 6 MB. 600px is plenty for a 50 mm logo. */
+const shrinkImage = (src: string, maxW = 600): Promise<string> => new Promise(resolve => {
+  const img = new Image();
+  img.onload = () => {
+    if (img.width <= maxW) return resolve(src);
+    const c = document.createElement('canvas');
+    c.width = maxW; c.height = Math.round(img.height * maxW / img.width);
+    const ctx = c.getContext('2d');
+    if (!ctx) return resolve(src);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    resolve(c.toDataURL('image/png'));
+  };
+  img.onerror = () => resolve(src);
+  img.src = src;
+});
+
 export function QuotationWizard({ salesperson }: Props) {
   const [tab, setTab] = useState<'build' | 'history'>('build');
   const [price, setPrice] = useState<PriceListPayload | null>(null);
@@ -219,9 +235,9 @@ export function QuotationWizard({ salesperson }: Props) {
     (async () => {
       try {
         const saved = localStorage.getItem('little_nap_custom_logo');
-        if (saved) return setLogo(saved);
+        if (saved) return setLogo(await shrinkImage(saved));
         const r = await fetch('/api/logo');
-        if (r.ok) { const d = await r.json(); if (d.base64) setLogo(d.base64); }
+        if (r.ok) { const d = await r.json(); if (d.base64) setLogo(await shrinkImage(d.base64)); }
       } catch { /* logo is optional */ }
     })();
   }, []);

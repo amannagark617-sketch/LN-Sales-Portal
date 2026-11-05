@@ -142,7 +142,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   };
 
   const space = (h: number, withHead = false) => {
-    if (y + h > 275) {
+    if (y + h > 284) {
       doc.addPage(); page += 1; header();
       if (withHead) tableHead();
     }
@@ -167,11 +167,12 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   kv('Date:', m.date, 15); kv('Prepared by:', m.salespersonName, 112); y += 4.5;
   kv('Number:', m.number, 15); kv('Employee ID:', m.salespersonId || 'N/A', 112); y += 4.5;
   if (p.contact?.phone || p.contact?.email) {
-    if (p.contact.phone) kv('Contact:', p.contact.phone, 112);
+    // contact sits on its own row, so the details block stays three rows tall
+    if (p.contact.phone) kv('Contact:', p.contact.phone, 15);
+    if (p.contact.email) kv('Email:', p.contact.email, 112);
     y += 4.5;
-    if (p.contact.email) { kv('Email:', p.contact.email, 112); y += 4.5; }
   }
-  y += 3;
+  y += 2;
 
   heading('CLIENT & DELIVERY');
   kv('Client:', m.clientName || 'N/A', 15); kv('Phone:', m.mobile || 'N/A', 112); y += 4.5;
@@ -283,18 +284,18 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
 
   if (m.terms.length) {
     heading('TERMS & CONDITIONS');
-    doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(GREY);
+    doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.6); doc.setTextColor(GREY);
     m.terms.forEach((tx, i) => {
-      const lines = doc.splitTextToSize(`${i + 1}. ${tx}`, W - 35);
-      space(lines.length * 3.8 + 1);
+      const lines = doc.splitTextToSize(`${i + 1}. ${tx}`, W - 30);
+      space(lines.length * 3.4 + 1);
       doc.text(lines, 15, y);
-      y += lines.length * 3.8 + 1;
+      y += lines.length * 3.4 + 0.8;
     });
   }
 
   // signature
-  space(24);
-  y += 8;
+  space(18);
+  y += 4;
   doc.setDrawColor(LINE); doc.line(130, y + 10, W - 15, y + 10);
   doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(GREY);
   doc.text('Authorised Signatory', W - 15, y + 14, { align: 'right' });
