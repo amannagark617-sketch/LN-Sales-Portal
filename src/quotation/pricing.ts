@@ -145,6 +145,15 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
     });
   });
 
+  const bad = (s: unknown, n: number) => typeof s !== 'string' || s.length > n;
+  p.lines.forEach((l, idx) => {
+    if (l.specs !== undefined && (!Array.isArray(l.specs) || l.specs.length > 40 || l.specs.some(x => !x || bad(x.label, 120) || bad(x.value, 400)))) {
+      problems.push(`Item ${idx + 1}: the specifications are not valid.`);
+    }
+  });
+  if (p.customer !== undefined && (typeof p.customer !== 'object' || p.customer === null || [p.customer.site, p.customer.kindAttn, p.customer.gstin].some(x => x !== undefined && bad(x, 200)))) {
+    problems.push('The customer details are not valid.');
+  }
   if (p.terms !== undefined) {
     if (!Array.isArray(p.terms) || p.terms.length > 40 || p.terms.some(t => typeof t !== 'string' || t.length > 800)) problems.push('The terms and conditions are not valid.');
   }

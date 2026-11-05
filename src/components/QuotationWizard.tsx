@@ -5,7 +5,7 @@ import {
   fetchPriceList, fetchNextNumber, saveQuotation, fetchBankDetails, fetchQuotationHistory, QuotationData
 } from '../services/dataService';
 import {
-  Brand, BRANDS, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload
+  Brand, BRANDS, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload, SpecLine
 } from '../quotation/types';
 import {
   BRAND_RULES, allowedBrands, isMetreOption, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
@@ -14,6 +14,48 @@ import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotat
 import { ItemPicker, ItemGroup } from './ItemPicker';
 
 const GOLD = '#9B7C50';
+const SPEC_PRESETS = ['Functionality', 'Dimensions (seat / arm)', 'Upholstery', 'Colour shade', 'Accessories', 'Cup holder', 'Switch', 'Side pocket / magazine holder', 'Head cushion', 'Wheels', 'IVR rod', 'AUX input', 'Concept', 'Metal finishing', 'Fire retardant', 'Logo / embroidery', 'Seat numbering', 'Motor make', 'Seating layout'];
+const specFilled = (specs?: SpecLine[]) => (specs || []).filter(x => x.label.trim() && x.value.trim());
+
+function SpecEditor({ specs, onChange }: { specs: SpecLine[]; onChange: (s: SpecLine[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const valueOf = (lab: string) => specs.find(x => x.label === lab)?.value || '';
+  const setPreset = (lab: string, value: string) => {
+    const has = specs.some(x => x.label === lab);
+    onChange(has ? specs.map(x => x.label === lab ? { ...x, value } : x) : [...specs, { label: lab, value }]);
+  };
+  const customs = specs.filter(x => !SPEC_PRESETS.includes(x.label));
+  const setCustom = (i: number, patch: Partial<SpecLine>) => {
+    const target = customs[i];
+    onChange(specs.map(x => x === target ? { ...x, ...patch } : x));
+  };
+  const n = specFilled(specs).length;
+  return (
+    <div>
+      <button type="button" className="w-full flex items-center justify-between text-sm font-semibold text-slate-900" onClick={() => setOpen(o => !o)}>
+        <span>Specifications <span className="font-normal text-slate-400">(optional, blank lines are not shown)</span></span>
+        <span className="text-xs font-medium text-slate-500">{n ? `${n} filled` : open ? 'Hide' : 'Add'}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          {SPEC_PRESETS.map(lab => (
+            <div key={lab}><label className={label}>{lab}</label><input className={field} value={valueOf(lab)} onChange={e => setPreset(lab, e.target.value)} /></div>
+          ))}
+          {customs.map((c, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <div className="grid sm:grid-cols-2 gap-2">
+                <input className={field} placeholder="Detail name" value={c.label} onChange={e => setCustom(i, { label: e.target.value })} />
+                <input className={field} placeholder="Detail" value={c.value} onChange={e => setCustom(i, { value: e.target.value })} />
+              </div>
+              <button type="button" className="text-red-600 p-2" aria-label="Remove detail" onClick={() => onChange(specs.filter(x => x !== c))}><Trash2 size={18} /></button>
+            </div>
+          ))}
+          <button type="button" className={ADD_BTN} onClick={() => onChange([...specs, { label: '', value: '' }])}><Plus size={16} /> Add another detail</button>
+        </div>
+      )}
+    </div>
+  );
+}
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayStr = () => new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -117,6 +159,9 @@ export function QuotationWizard({ salesperson }: Props) {
   const [shipping, setShipping] = useState('');
   const [sameAddr, setSameAddr] = useState(true);
   const [lines, setLines] = useState<QuoteLine[]>([]);
+  const [site, setSite] = useState('');
+  const [kindAttn, setKindAttn] = useState('');
+  const [custGstin, setCustGstin] = useState('');
   const [discount, setDiscount] = useState(emptyDiscount());
   const [termsOverride, setTermsOverride] = useState<string[] | null>(null);
   const [gstRate, setGstRate] = useState(18);
@@ -256,7 +301,16 @@ export function QuotationWizard({ salesperson }: Props) {
   }, [price, brand]);
   const effectiveTerms = termsOverride ?? defaultTerms;
 
-  const payload: QuotePayload = useMemo(() => ({ v: 2, brand, docType, lines, discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean) }), [brand, docType, lines, discount, freight, gstRate, effectiveTerms]);
+  const payload: QuotePayload = useMemo(() => {
+    const customer = { site: site.trim(), kindAttn: kindAttn.trim(), gstin: custGstin.trim() };
+    const hasCust = !!(customer.site || customer.kindAttn || customer.gstin);
+    return {
+      v: 2, brand, docType,
+      lines: lines.map(l => ({ ...l, specs: specFilled(l.specs).map(x => ({ label: x.label.trim(), value: x.value.trim() })) })),
+      discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean),
+      ...(hasCust ? { customer } : {})
+    };
+  }, [brand, docType, lines, discount, freight, gstRate, effectiveTerms, site, kindAttn, custGstin]);
   const totals = useMemo(() => calcTotals(payload), [payload]);
 
 
@@ -280,7 +334,7 @@ export function QuotationWizard({ salesperson }: Props) {
 
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
-    setBilling(''); setShipping(''); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
+    setBilling(''); setShipping(''); setSite(''); setKindAttn(''); setCustGstin(''); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
     setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
   };
 
@@ -345,6 +399,7 @@ export function QuotationWizard({ salesperson }: Props) {
     setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setTermsOverride(p.terms && p.terms.length ? p.terms : null); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0) ? 'item' : 'whole');
     setClientName(r.clientName); setCompany(''); setMobile(String(r.mobileNumber || '')); setEmail(r.emailId || '');
     setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(!r.shippingAddress || r.shippingAddress === r.billingAddress);
+    setSite(p.customer?.site || ''); setKindAttn(p.customer?.kindAttn || ''); setCustGstin(p.customer?.gstin || '');
     setAttachments([]); setSaved(null); setError('');
     if (asPI) { setDocType('PI'); setLinkedQuotation(r.quotationNumber); setStep(4); }
     else { setDocType('Quotation'); setLinkedQuotation(''); setStep(2); }
@@ -499,6 +554,12 @@ export function QuotationWizard({ salesperson }: Props) {
                   <label className="sm:col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={sameAddr} onChange={e => setSameAddr(e.target.checked)} /> Shipping address is the same as billing</label>
                   {!sameAddr && <div className="sm:col-span-2"><label className={label}>Shipping address</label><textarea className={area} rows={3} value={shipping} onChange={e => setShipping(e.target.value)} /></div>}
                   <div className="sm:col-span-2 border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2 text-sm font-semibold text-slate-900">More details <span className="font-normal text-slate-400">(optional, shown only if filled)</span></div>
+                    <div><label className={label}>Site / project</label><input className={field} value={site} onChange={e => setSite(e.target.value)} /></div>
+                    <div><label className={label}>Kind attn.</label><input className={field} value={kindAttn} onChange={e => setKindAttn(e.target.value)} /></div>
+                    <div><label className={label}>Customer GSTIN</label><input className={field} value={custGstin} onChange={e => setCustGstin(e.target.value)} /></div>
+                  </div>
+                  <div className="sm:col-span-2 border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
                     <div><label className={label}>Prepared by</label><input className={`${field} bg-slate-50`} value={salesperson.name} readOnly /></div>
                     <div><label className={label}>Employee number</label><input className={field} value={employeeNo} onChange={e => setEmployeeNo(e.target.value)} /></div>
                   </div>
@@ -547,6 +608,8 @@ export function QuotationWizard({ salesperson }: Props) {
                           <div><div className={label}>Price each (incl. GST)</div><div className="text-sm font-bold">{formatINR(l.unitPrice)}</div></div>
                           <div><div className={label}>Quantity</div><Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} /></div>
                         </div>
+
+                        <div className="mt-5"><SpecEditor specs={l.specs || []} onChange={sp => updateLine(l.id, { specs: sp })} /></div>
 
                         {BRAND_RULES[l.brand].customisation && (
                           <div className="mt-5 space-y-5">

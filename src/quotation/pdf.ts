@@ -130,7 +130,11 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
 
   heading('CLIENT & DELIVERY');
   kv('Client:', m.clientName || 'N/A', 15); kv('Phone:', m.mobile || 'N/A', 112); y += 4.5;
-  kv('Email:', m.email || 'N/A', 15); y += 5;
+  kv('Email:', m.email || 'N/A', 15); y += 4.5;
+  const cx = p.customer || {};
+  if (cx.site || cx.kindAttn) { if (cx.site) kv('Site:', cx.site, 15); if (cx.kindAttn) kv('Kind attn.:', cx.kindAttn, 112); y += 4.5; }
+  if (cx.gstin) { kv('Customer GSTIN:', cx.gstin, 15); y += 4.5; }
+  y += 0.5;
   doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(INK);
   doc.text('BILLING ADDRESS', 15, y); doc.text('SHIPPING ADDRESS', 112, y); y += 4;
   doc.setFont('Helvetica', 'normal'); doc.setTextColor(GREY);
@@ -148,8 +152,12 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     const main = `${l.item}${l.variant && l.variant !== 'Standard' ? ` (${l.variant})` : ''}`;
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
     desc.push(...doc.splitTextToSize(main, descW));
-    const optLines: string[] = [];
+    const specLines: string[] = [];
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
+    (l.specs || []).filter(s => s.label.trim() && s.value.trim()).forEach((s, k) => {
+      specLines.push(...doc.splitTextToSize(`${String.fromCharCode(97 + (k % 26))}. ${s.label.trim()} : ${s.value.trim()}`, descW - 3));
+    });
+    const optLines: string[] = [];
     l.options.forEach(o => {
       const q = o.qty > 1 ? ` x${o.qty}` : '';
       const label = isMetreOption(o)
@@ -158,7 +166,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
       optLines.push(...doc.splitTextToSize(label, descW - 3));
     });
     if (l.note) optLines.push(...doc.splitTextToSize(`Note: ${l.note}`, descW - 3));
-    const h = Math.max((desc.length * 4.2) + (optLines.length * 3.6) + 4, hasDisc ? 10 : 8);
+    const h = Math.max((desc.length * 4.2) + ((specLines.length + optLines.length) * 3.6) + 4 + (specLines.length ? 1 : 0), hasDisc ? 10 : 8);
     space(h, true);
 
     const top = y + 4.5;
@@ -186,6 +194,8 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.text(money(lt.net), colTotal, top, { align: 'right' });
     let oy = top + (desc.length - 1) * 4.2 + 3.8;
     doc.setFontSize(7.5); doc.setTextColor(GREY);
+    specLines.forEach(s => { doc.text(s, 29, oy); oy += 3.6; });
+    if (specLines.length) oy += 1;
     optLines.forEach(s => { doc.text(s, 29, oy); oy += 3.6; });
     y += h;
     doc.setDrawColor(LINE); doc.setLineWidth(0.2); doc.line(15, y, W - 15, y);

@@ -47,6 +47,17 @@ export interface LineOption {
   custom?: boolean;
 }
 
+export interface SpecLine {
+  label: string;
+  value: string;
+}
+
+export interface CustomerExtra {
+  site?: string;
+  kindAttn?: string;
+  gstin?: string;
+}
+
 export interface QuoteLine {
   id: string;
   brand: Brand;
@@ -60,6 +71,8 @@ export interface QuoteLine {
   options: LineOption[];
   discount: Discount;
   note?: string;
+  /** optional product specifications shown under the item on the document */
+  specs?: SpecLine[];
 }
 
 export interface Freight {
@@ -78,6 +91,7 @@ export interface QuotePayload {
   gstRate?: number;
   /** terms and conditions as shown on the document (editable by the user) */
   terms?: string[];
+  customer?: CustomerExtra;
 }
 
 export interface LineTotals {
