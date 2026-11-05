@@ -46,6 +46,7 @@ export interface SaleReport {
   netSales: number;
   advanceAmount: number;
   remarks?: string;
+  linkedDocument?: string;
 }
 
 export interface NoSaleReport {

@@ -112,6 +112,7 @@ const saleSchema = z.object({
     return Number(val);
   }, z.number({ message: 'Required' }).min(0, 'Required')),
   remarks: z.string().optional(),
+  linkedDocument: z.string().max(60).optional(),
   leadSource: z.string().min(1, 'Required'),
   opfNumber: z.string().min(1, 'Required'),
   salespersonName: z.string().min(1, 'Required'),
@@ -634,6 +635,10 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
               <input {...register('advanceAmount', { valueAsNumber: true })} type="number" className={`${inputClass} pl-8 ${errors.advanceAmount ? 'border-red-300 ring-1 ring-red-300' : ''}`} placeholder="0.00" />
             </div>
             {errors.advanceAmount && <p className="text-[10px] md:text-xs text-red-500 font-semibold mt-1">{errors.advanceAmount.message}</p>}
+          </div>
+          <div className="col-span-2 md:col-span-3">
+            <label className={labelClass}>Quotation / PI number <span className="font-normal text-slate-400">(optional)</span></label>
+            <input {...register('linkedDocument')} className={inputClass} placeholder="e.g. LNPI-2627-3" />
           </div>
         </div>
       </div>
