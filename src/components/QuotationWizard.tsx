@@ -82,14 +82,9 @@ let brochureCache: ArrayBuffer | null = null;
 async function getBrochure(): Promise<ArrayBuffer | null> {
   if (brochureCache) return brochureCache;
   try {
-    const r = await fetch('/api/brand-brochure');
+    const r = await fetch('/warehouse-policy.pdf');
     if (!r.ok) return null;
-    const d = await r.json();
-    if (!d.base64) return null;
-    const bin = atob(d.base64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    brochureCache = bytes.buffer;
+    brochureCache = await r.arrayBuffer();
     return brochureCache;
   } catch { return null; }
 }
@@ -173,6 +168,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const [discMode, setDiscMode] = useState<'whole' | 'item'>('whole');
   const [freight, setFreight] = useState<{ mode: 'included' | 'extra'; amount: number }>({ mode: 'extra', amount: 0 });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachPolicy, setAttachPolicy] = useState(true);
   const [linkedQuotation, setLinkedQuotation] = useState('');
 
   const [saving, setSaving] = useState(false);
@@ -344,7 +340,7 @@ export function QuotationWizard({ salesperson }: Props) {
 
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
-    setBilling(''); setShipping(''); setSite(''); setCustGstin(''); setInstallation(0); setAdvance(0); setShowBank(true); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
+    setBilling(''); setShipping(''); setSite(''); setCustGstin(''); setInstallation(0); setAdvance(0); setShowBank(true); setAttachPolicy(true); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
     setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
   };
 
@@ -360,7 +356,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const buildBytes = async (number: string): Promise<Uint8Array> => {
     const core = buildCorePdf(payload, meta(number));
     // Warehouse policy / brochure goes only on the PI
-    const brochure = docType === 'PI' ? await getBrochure() : null;
+    const brochure = docType === 'PI' && attachPolicy ? await getBrochure() : null;
     return mergePdf(core, { brochure, attachments: docType === 'PI' ? attachments : [] });
   };
 
@@ -771,7 +767,8 @@ export function QuotationWizard({ salesperson }: Props) {
                   {docType === 'PI' && (
                     <div className={card}>
                       <h3 className="font-bold text-sm mb-1">Attach other documents</h3>
-                      <p className="text-xs text-slate-500 mb-3">Optional. PDF or images, added after the warehouse policy.</p>
+                      <label className="flex items-center gap-2 text-sm mb-3"><input type="checkbox" checked={attachPolicy} onChange={e => setAttachPolicy(e.target.checked)} /> Attach the Warehouse Storage &amp; Dispatch Policy</label>
+                      <p className="text-xs text-slate-500 mb-3">Add more PDFs or images from this device, Drive or Files. They are added after the policy.</p>
                       <input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e => onFiles(e.target.files)} />
                       <button className={btnGhost} onClick={() => fileRef.current?.click()}><Upload size={16} /> Add files</button>
                       {attachments.map(f => (
