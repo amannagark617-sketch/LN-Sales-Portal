@@ -63,6 +63,11 @@ body {
   scrollbar-width: none;
 }
 
+/* Phones zoom into small text fields on focus; 16px stops that */
+@media (max-width: 640px) {
+  input:not([type="date"]):not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; }
+}
+
 @keyframes stepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .step-in { animation: stepIn 0.22s ease-out; }
 @media (prefers-reduced-motion: reduce) { .step-in { animation: none; } }

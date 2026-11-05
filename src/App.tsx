@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ReadyStock } from './components/ReadyStock';
+import { InstallButton, UpdateBanner } from './components/InstallApp';
 import { refreshServerData, fetchSalespersons, fetchValidationData, fetchOPFData, fetchUniqueOPFCodeMap, fetchTargets, loginSalesperson } from './services/dataService';
 import { Salesperson, ValidationData, OPFData, SalesTarget } from './types';
 import { Button } from './components/ui';
@@ -236,39 +237,41 @@ function MainContent() {
   }
 
   return (
-    <div className="min-h-screen premium-bg p-3 md:p-8">
-      <header className="glass-header rounded-2xl shadow-lg p-3 md:p-4 mb-6 md:mb-8 sticky top-2 md:top-4 z-50">
+    <div className="min-h-screen premium-bg p-3 md:p-8" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+      <UpdateBanner />
+      <header className="glass-header rounded-2xl shadow-lg p-3 md:p-4 mb-6 md:mb-8 md:sticky md:top-4 z-50">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-4">
           
           {/* Brand/logo row with responsive small Logout */}
           <div className="flex items-center justify-between w-full lg:w-auto gap-3">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <img 
                   src="https://s3.eu-central-1.wasabisys.com/onemessageapp/admin/2025/8/8/images/4b/e9/ec44ce49b54b405e9837db8c55484438.png" 
                   alt="Logo" 
-                  className="h-8 md:h-9 w-auto opacity-95 drop-shadow-sm"
+                  className="h-8 md:h-9 w-auto shrink-0 opacity-95 drop-shadow-sm"
                   referrerPolicy="no-referrer"
               />
-              <h1 className="font-bold text-slate-800 tracking-tight whitespace-nowrap text-sm md:text-base leading-tight">Little Nap Recliners</h1>
+              <h1 className="font-bold text-slate-800 tracking-tight truncate text-sm md:text-base leading-tight">Little Nap Recliners</h1>
             </div>
             
             <button
               onClick={async () => { setRefreshing(true); try { await refreshServerData(); await refreshData(true); } finally { setRefreshing(false); } }}
               disabled={refreshing}
-              className="lg:hidden h-8.5 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold transition-all border border-slate-200 disabled:opacity-50"
+              aria-label="Refresh data"
+              className="lg:hidden h-9 w-9 shrink-0 rounded-xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all border border-slate-200 disabled:opacity-50"
             >
-                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-                <span>Refresh data</span>
+                <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
             </button>
+            <div className="lg:hidden"><InstallButton compact /></div>
             <button 
               onClick={() => {
                 setUser(null);
                 localStorage.removeItem('little_nap_user');
               }} 
-              className="lg:hidden h-8.5 px-3 rounded-xl flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold transition-all border border-rose-100"
+              aria-label="Logout"
+              className="lg:hidden h-9 w-9 shrink-0 rounded-xl flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all border border-rose-100"
             >
-                <LogOut size={13} />
-                <span>Logout</span>
+                <LogOut size={16} />
             </button>
           </div>
 
@@ -358,6 +361,7 @@ function MainContent() {
             
             <div className="w-px h-8 bg-slate-200/80 mx-1 hidden lg:block shrink-0"></div>
             
+            <div className="hidden lg:block"><InstallButton compact /></div>
             <button
               onClick={async () => { setRefreshing(true); try { await refreshServerData(); await refreshData(true); } finally { setRefreshing(false); } }}
               disabled={refreshing}
