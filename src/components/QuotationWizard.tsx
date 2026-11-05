@@ -591,10 +591,10 @@ export function QuotationWizard({ salesperson }: Props) {
                       <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 border-t border-slate-100">
                         <div className="min-w-0 text-sm">
                           <div className="font-medium">{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? <span className="text-slate-500 font-normal"> · {o.variant}</span> : null}</div>
-                          <div className="text-xs text-slate-500">{fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : 'each'}</div>
+                          <div className="text-xs text-slate-500">{fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : o.category === 'Upholstery' ? 'per seat or metre' : 'each'}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          {isMetreOption(o)
+                          {(isMetreOption(o) || o.category === 'Upholstery')
                             ? <MeterInput value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
                             : <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />}
                           <button className="text-red-600" aria-label="Remove" onClick={() => setLines(ls => ls.map(x => x.id === l.id ? { ...x, options: x.options.filter(y => y.id !== o.id) } : x))}><Trash2 size={17} /></button>
@@ -625,7 +625,7 @@ export function QuotationWizard({ salesperson }: Props) {
                         {BRAND_RULES[l.brand].customisation && (
                           <div className="mt-5 space-y-5">
                             <div>
-                              <div className="text-sm font-semibold text-slate-900 mb-1">Upholstery <span className="font-normal text-slate-400">(quantity is seats)</span></div>
+                              <div className="text-sm font-semibold text-slate-900 mb-1">Upholstery <span className="font-normal text-slate-400">(seats, or metres such as 1.7)</span></div>
                               {upholsteries.map(optionRow)}
                               <div className="mt-2"><ItemPicker groups={upholsteryGroups} title="Add upholstery" variantTitle="Choose an option" buttonLabel="Add upholstery (leather, fabric…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} /></div>
                             </div>

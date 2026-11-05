@@ -58,7 +58,14 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   const header = () => {
     doc.setFillColor(GOLD); doc.rect(0, 0, W, 3, 'F');
     if (page === 1) {
-      if (m.logoBase64) { try { doc.addImage(m.logoBase64, 'PNG', 15, 9, 34, 18); } catch (_) {} }
+      if (m.logoBase64) {
+        try {
+          const ip = doc.getImageProperties(m.logoBase64);
+          const maxW = 52, maxH = 22;
+          const sc = Math.min(maxW / ip.width, maxH / ip.height);
+          doc.addImage(m.logoBase64, 'PNG', 15, 8, ip.width * sc, ip.height * sc);
+        } catch (_) {}
+      }
       doc.setFont('Helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(GOLD);
       doc.text(title, W / 2, 14, { align: 'center' });
       doc.setFontSize(10); doc.setTextColor(INK);
