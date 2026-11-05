@@ -7,6 +7,7 @@ const GOLD = '#9B7C50';
 const INK = '#0F172A';
 const GREY = '#475569';
 const LINE = '#E2E8F0';
+const LAZBOY_NAVY = '#00314A'; // the navy of the La-Z-Boy logo
 
 export interface PdfMeta {
   number: string;
@@ -22,6 +23,8 @@ export interface PdfMeta {
   bank?: string;
   terms: string[];
   logoBase64?: string | null;
+  /** La-Z-Boy logo, shown beside the Little Nap logo on La-Z-Boy documents */
+  lazboyLogoBase64?: string | null;
 }
 
 export interface Attachment {
@@ -45,6 +48,9 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   const isPI = p.docType === 'PI';
   const title = isPI ? 'PROFORMA INVOICE' : 'QUOTATION';
   const hasDisc = t.hasAnyDiscount;
+  const lz = p.brand === 'La-Z-Boy';
+  const ACC = lz ? LAZBOY_NAVY : GOLD;   // accent colour
+  const HEAD = lz ? LAZBOY_NAVY : INK;   // table header colour
   let y = 0;
   let page = 1;
 
@@ -56,9 +62,36 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   const descW = hasDisc ? 66 : 92;
 
   const header = () => {
-    doc.setFillColor(GOLD); doc.rect(0, 0, W, 3, 'F');
-    if (page === 1) {
+    if (lz && page === 1) {
+      doc.setFillColor(ACC); doc.rect(0, 0, W, 6.5, 'F');
+      doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.8); doc.setTextColor('#FFFFFF');
+      doc.text('LITTLE NAP  |  EXCLUSIVE PARTNER OF LA-Z-BOY IN INDIA', W / 2, 4.3, { align: 'center', charSpace: 0.4 });
+    } else {
+      doc.setFillColor(ACC); doc.rect(0, 0, W, 3, 'F');
+    }
+    if (page === 1 && lz) {
+      // Little Nap logo, a thin divider, then the La-Z-Boy logo
+      let x = 15;
       if (m.logoBase64) {
+        try {
+          const ip = doc.getImageProperties(m.logoBase64);
+          const sc = Math.min(24 / ip.width, 14 / ip.height);
+          doc.addImage(m.logoBase64, 'PNG', x, 10, ip.width * sc, ip.height * sc);
+          x += ip.width * sc + 4;
+        } catch (_) {}
+      }
+      if (m.lazboyLogoBase64) {
+        doc.setDrawColor('#CBD5E1'); doc.setLineWidth(0.3); doc.line(x, 11, x, 23);
+        x += 4;
+        try {
+          const ip = doc.getImageProperties(m.lazboyLogoBase64);
+          const sc = Math.min(32 / ip.width, 11 / ip.height);
+          doc.addImage(m.lazboyLogoBase64, 'PNG', x, 12 + (11 - ip.height * sc) / 2, ip.width * sc, ip.height * sc);
+        } catch (_) {}
+      }
+    }
+    if (page === 1) {
+      if (m.logoBase64 && !lz) {
         try {
           const ip = doc.getImageProperties(m.logoBase64);
           const maxW = 52, maxH = 22;
@@ -66,10 +99,10 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
           doc.addImage(m.logoBase64, 'PNG', 15, 8, ip.width * sc, ip.height * sc);
         } catch (_) {}
       }
-      doc.setFont('Helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(GOLD);
-      doc.text(title, W / 2, 14, { align: 'center' });
+      doc.setFont('Helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(ACC);
+      doc.text(title, lz ? 112 : W / 2, 14 + (lz ? 3 : 0), { align: 'center' });
       doc.setFontSize(10); doc.setTextColor(INK);
-      doc.text(p.brand === 'Little Nap' ? 'LITTLE NAP RECLINERS' : p.brand.toUpperCase(), W / 2, 19.5, { align: 'center' });
+      doc.text(p.brand === 'Little Nap' ? 'LITTLE NAP RECLINERS' : lz ? 'LA-Z-BOY RECLINERS' : p.brand.toUpperCase(), lz ? 112 : W / 2, 19.5 + (lz ? 3 : 0), { align: 'center' });
       doc.setFont('Helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(INK);
       doc.text('Little Nap Designs Pvt. Ltd.', W - 15, 10, { align: 'right' });
       doc.setFont('Helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(GREY);
@@ -90,7 +123,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   };
 
   const tableHead = () => {
-    doc.setFillColor(INK); doc.rect(15, y, W - 30, 11, 'F');
+    doc.setFillColor(HEAD); doc.rect(15, y, W - 30, 11, 'F');
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor('#FFFFFF');
     doc.text('Sr.', 17, y + 7);
     doc.text('Item', 27, y + 7);
@@ -117,7 +150,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
 
   const heading = (txt: string) => {
     space(10);
-    doc.setFillColor(GOLD); doc.rect(15, y - 3.5, 1.5, 4.5, 'F');
+    doc.setFillColor(ACC); doc.rect(15, y - 3.5, 1.5, 4.5, 'F');
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(INK);
     doc.text(txt, 18, y);
     y += 5;
@@ -229,7 +262,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
   else row('Freight', 'Included');
   if (t.installation > 0) row('Installation', `Rs. ${money(t.installation)}`);
-  doc.setDrawColor(GOLD); doc.setLineWidth(0.5); doc.line(100, y - 3, W - 15, y - 3);
+  doc.setDrawColor(ACC); doc.setLineWidth(0.5); doc.line(100, y - 3, W - 15, y - 3);
   y += 1.5;
   row('GRAND TOTAL', `Rs. ${money(t.grandTotal)}`, true);
   doc.setFont('Helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(GREY);

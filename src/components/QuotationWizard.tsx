@@ -141,6 +141,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const [bank, setBank] = useState('');
   const [bankFor, setBankFor] = useState('');
   const [logo, setLogo] = useState<string | null>(null);
+  const [lazboyLogo, setLazboyLogo] = useState<string | null>(null);
 
   const [step, setStep] = useState(0);
   const [docType, setDocType] = useState<DocType>('Quotation');
@@ -204,6 +205,16 @@ export function QuotationWizard({ salesperson }: Props) {
         setBank(m?.bankingDetails || '');
         setBankFor(m?.showroomOrRegion || '');
       } catch { /* bank details are only needed on the PI */ }
+    })();
+    (async () => {
+      try {
+        const r = await fetch('/assets/lazboy-logo.png');
+        if (!r.ok) return;
+        const blob = await r.blob();
+        const fr = new FileReader();
+        fr.onload = () => setLazboyLogo(String(fr.result));
+        fr.readAsDataURL(blob);
+      } catch { /* the La-Z-Boy logo is optional */ }
     })();
     (async () => {
       try {
@@ -350,7 +361,7 @@ export function QuotationWizard({ salesperson }: Props) {
     mobile: mobile.trim(), email: email.trim(),
     billing: billing.trim(), shipping: (sameAddr ? billing : shipping).trim(),
     salespersonName: salesperson.name, salespersonId: employeeNo.trim() || salesperson.id, bank,
-    terms: effectiveTerms.map(t => t.trim()).filter(Boolean), logoBase64: logo
+    terms: effectiveTerms.map(t => t.trim()).filter(Boolean), logoBase64: logo, lazboyLogoBase64: brand === 'La-Z-Boy' ? lazboyLogo : null
   });
 
   const buildBytes = async (number: string): Promise<Uint8Array> => {
