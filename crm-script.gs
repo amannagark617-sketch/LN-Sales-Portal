@@ -63,7 +63,7 @@ function setup() {
   if (!props.getProperty('START_DATE')) props.setProperty('START_DATE', Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'));
   buildCityMap();
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('syncOnlineLeads').timeBased().everyMinutes(1).create();
+  ScriptApp.newTrigger('syncOnlineLeads').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('hourlyMaintenance').timeBased().everyHours(1).create();
   SpreadsheetApp.getActive().toast('CRM ready. Copy CRM_KEY from Project Settings > Script properties.', 'Little Nap CRM', 10);
 }
@@ -292,7 +292,7 @@ function newLead_(f, team, how) {
   var cityMap = loadCityMap_();
   var loc = matchLocation_(f.city, cityMap);
   var lead = {
-    enquiryNo: f.enquiryNo || nextEnquiryNo_(), createdAt: now_(), channel: f.channel, sourceRef: str_(f.sourceRef), source: str_(f.source),
+    enquiryNo: f.enquiryNo || nextEnquiryNo_(), createdAt: f.createdAt || now_(), channel: f.channel, sourceRef: str_(f.sourceRef), source: str_(f.source),
     group: f.group || 'NBD', segment: str_(f.segment), title: str_(f.title), firstName: str_(f.firstName), lastName: str_(f.lastName),
     company: str_(f.company), designation: str_(f.designation), phone: str_(f.phone), phoneKey: phoneKey_(f.phone),
     email: str_(f.email), city: str_(f.city), state: str_(f.state) || loc.state, zone: str_(f.zone) || loc.zone,
@@ -326,6 +326,17 @@ function isTestLead_(name, phone, email) {
   if (/@littlenap\.in$/i.test(str_(email))) return true;
   if (/^(test|asdf|qwe|abc)/i.test(str_(name))) return true;
   return false;
+}
+
+function parseDetectedTime_(v) {
+  var d = '';
+  if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz_(), 'yyyy-MM-dd HH:mm:ss');
+  if (typeof v === 'number') return Utilities.formatDate(new Date(Math.round((v - 25569) * 86400000)), 'UTC', 'yyyy-MM-dd HH:mm:ss');
+  var t = str_(v);
+  d = parseDetected_(t);
+  if (!d) return '';
+  var m = /(\d{1,2}):(\d{2})(?::(\d{2}))?\s*$/.exec(t);
+  return d + ' ' + (m ? ('0' + m[1]).slice(-2) + ':' + m[2] + ':' + (m[3] || '00') : '00:00:00');
 }
 
 function parseDetected_(v) {
@@ -420,7 +431,7 @@ function syncOnlineLeads() {
           firstName: sp > 0 ? name.slice(0, sp) : name, lastName: sp > 0 ? name.slice(sp + 1) : '', phone: phone, email: email,
           city: C.loc !== undefined ? str_(r[C.loc]) : '', requirement: C.product !== undefined ? str_(r[C.product]) : '',
           notes: [/^landing/i.test(typ) ? '' : typ, C.details !== undefined ? str_(r[C.details]) : '', C.also !== undefined ? str_(r[C.also]) : ''].filter(Boolean).join(' | '),
-          utmMedium: C.med !== undefined ? str_(r[C.med]) : '', utmCampaign: C.camp !== undefined ? str_(r[C.camp]) : '', addedByName: 'Online feed'
+          utmMedium: C.med !== undefined ? str_(r[C.med]) : '', utmCampaign: C.camp !== undefined ? str_(r[C.camp]) : '', addedByName: 'Online feed', createdAt: parseDetectedTime_(r[C.detected])
         }, team, prior ? 'Earlier enquiry: ' + prior.enquiryNo : '');
         leads.push(lead);
         (byPhone[pk] = byPhone[pk] || []).push(lead);
