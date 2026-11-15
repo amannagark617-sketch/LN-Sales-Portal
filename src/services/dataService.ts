@@ -1,6 +1,6 @@
 import { Salesperson, ValidationData, OPFData, SalesTarget, BankDetails } from '../types';
 
-const getAuthHeaders = (): Record<string, string> => {
+export const getAuthHeaders = (): Record<string, string> => {
   const storedUser = localStorage.getItem('little_nap_user');
   if (storedUser) {
     try {

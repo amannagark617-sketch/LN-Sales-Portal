@@ -12,7 +12,8 @@ import { Button } from './components/ui';
 import { SaleForm } from './components/SaleForm';
 import { NoSaleForm } from './components/NoSaleForm';
 import { Dashboard } from './components/Dashboard';
-import { LogOut, LayoutDashboard, FileText, Ban, History, RefreshCw, Package, Link2 } from 'lucide-react';
+import { LogOut, LayoutDashboard, FileText, Ban, History, RefreshCw, Package, Link2, Users } from 'lucide-react';
+import { CrmApp } from './crm/CrmApp';
 import { QuickLinks } from './components/QuickLinks';
 import { MySubmissions } from './components/MySubmissions';
 import { QuotationWizard } from './components/QuotationWizard';
@@ -40,7 +41,7 @@ function MainContent() {
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'sale' | 'noSale' | 'submissions' | 'quotation' | 'stock' | 'links'>('sale');
+  const [view, setView] = useState<'dashboard' | 'sale' | 'noSale' | 'submissions' | 'quotation' | 'stock' | 'links' | 'crm'>('sale');
 
   useEffect(() => {
     // Check for stored user session
@@ -364,6 +365,21 @@ function MainContent() {
                       <span>Proforma Invoice Generator</span>
                   </button>
 
+                  {/* Leads CRM */}
+                  {user && (user.crmAdmin || user.isManager || ['NBD', 'Sales', 'Manager'].includes(user.team || '')) && (
+                    <button
+                      onClick={() => setView('crm')}
+                      className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
+                        view === 'crm'
+                          ? 'bg-slate-900 text-white border-slate-800 shadow-md'
+                          : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      <Users size={15} />
+                      <span>Leads</span>
+                    </button>
+                  )}
+
                   {/* Quick links */}
                   <button 
                     onClick={() => setView('links')} 
@@ -416,6 +432,7 @@ function MainContent() {
         {view === 'submissions' && <MySubmissions data={mySubmissionsData} />}
         {view === 'stock' && user && <ReadyStock salespersonName={user.name} />}
         {view === 'links' && user && <QuickLinks />}
+        {view === 'crm' && user && <CrmApp />}
         {view === 'quotation' && user && (
           <QuotationWizard salesperson={user} />
         )}

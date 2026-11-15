@@ -10,6 +10,9 @@ export interface Salesperson {
   managerAccess?: string;
   mobile?: string;
   email?: string;
+  team?: string;
+  active?: boolean;
+  crmAdmin?: boolean;
 }
 
 export interface SaleReport {

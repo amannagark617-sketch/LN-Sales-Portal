@@ -89,6 +89,9 @@ async function getSalespersons(): Promise<any[]> {
       managerAccess: col6,
       mobile: cleanStr(values[7]),
       email: cleanStr(values[8]),
+      team: cleanStr(values[9]),
+      // blank means still working; only an explicit No switches a person off
+      active: cleanStr(values[10]).toLowerCase() !== 'no',
     };
   });
 }
@@ -722,6 +725,7 @@ async function authenticate(req: express.Request): Promise<any | null> {
   
   const list = await getCachedSalespersons();
   const found = list.find(s => s.id.trim() === userId.trim() && s.password === password);
+  if (found && found.active === false) return null;
   return found || null;
 }
 
@@ -768,6 +772,59 @@ function getManagerShowrooms(u: any, allSalespersons: any[]): Set<string> {
     }
   }
   return rooms;
+}
+
+
+// ---------------------------------------------------------------- CRM
+// All lead data lives in the "Little Nap CRM" Google Sheet, reached only through its Apps Script (crm-script.gs).
+const CRM_TTL = 15000;
+let crmCache: CacheEntry<any> | null = null;
+
+function crmAdmins(): string[] {
+  return (process.env.CRM_ADMIN_IDS || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+function isCrmAdmin(u: any): boolean { return crmAdmins().includes((u.id || '').trim()); }
+function crmTeam(u: any): string { return (u.team || '').trim(); }
+function canUseCrm(u: any): boolean {
+  return isCrmAdmin(u) || ['NBD', 'Sales', 'Manager'].includes(crmTeam(u)) || !!u.isManager;
+}
+
+async function callCrm(body: any): Promise<any> {
+  const url = process.env.CRM_SCRIPT_URL || '';
+  const key = process.env.CRM_SCRIPT_KEY || '';
+  if (!url || !key) throw Object.assign(new Error('The CRM is not set up yet.'), { status: 503 });
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ ...body, key }),
+    redirect: 'follow',
+  });
+  const text = await resp.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch { throw new Error('The CRM did not answer. Try again in a moment.'); }
+  if (!data.ok) throw Object.assign(new Error(data.error || 'CRM error'), { status: 400 });
+  return data;
+}
+
+async function getCrmData(force = false): Promise<any> {
+  const now = Date.now();
+  if (!force && crmCache && now - crmCache.timestamp < CRM_TTL) return crmCache.data;
+  const data = await callCrm({ action: 'list' });
+  crmCache = { data, timestamp: now };
+  return data;
+}
+
+/** Which leads this person may see. */
+function crmScope(u: any, leads: any[], all: any[]): any[] {
+  if (isCrmAdmin(u)) return leads;
+  const team = crmTeam(u);
+  const managedIds = new Set(getManagedSalespeople(u, all).map((s: any) => s.id));
+  return leads.filter(l => {
+    if (l.ownerId === u.id) return true;
+    if (team === 'NBD' && (l.nbdId === u.id || (!l.ownerId && l.group === 'NBD'))) return true;
+    if ((u.isManager || team === 'Manager') && (managedIds.has(l.ownerId) || managedIds.has(l.nbdId))) return true;
+    return false;
+  });
 }
 
 async function startServer() {
@@ -830,9 +887,12 @@ async function startServer() {
       if (!found) {
         return res.status(401).json({ error: 'Invalid ID or Password' });
       }
+      if (found.active === false) {
+        return res.status(401).json({ error: 'This account is no longer active.' });
+      }
       // Return user details without password
       const { password: _, ...safeUser } = found;
-      res.json(safeUser);
+      res.json({ ...safeUser, crmAdmin: isCrmAdmin(found) });
     } catch (err: any) {
       console.error('API /api/login error:', err);
       res.status(500).json({ error: 'Failed to authenticate user.' });
@@ -1505,6 +1565,114 @@ async function startServer() {
     } catch (err: any) {
       console.error('API /api/upload-pdf-back error:', err);
       res.status(500).json({ error: err.message || 'Failed to upload PDF in background.' });
+    }
+  });
+
+
+  // ---- CRM: leads list (scoped), people lists, and availability in one call
+  app.get('/api/crm/leads', async (req, res) => {
+    try {
+      const u = await authenticate(req);
+      if (!u) return res.status(401).json({ error: 'Unauthorized' });
+      if (!canUseCrm(u)) return res.status(403).json({ error: 'The CRM is not available for your role.' });
+      const [data, all] = await Promise.all([getCrmData(req.query.refresh === '1'), getCachedSalespersons()]);
+      const active = all.filter((s: any) => s.active !== false);
+      res.json({
+        leads: crmScope(u, data.leads, all),
+        me: { id: u.id, name: u.name, team: crmTeam(u), isManager: !!u.isManager, admin: isCrmAdmin(u) },
+        sales: active.filter((s: any) => s.team === 'Sales').map((s: any) => ({ id: s.id, name: s.name, showroom: s.showroom, region: s.region })),
+        nbd: active.filter((s: any) => s.team === 'NBD').map((s: any) => ({ id: s.id, name: s.name, present: data.availability?.[s.id] !== false })),
+        lists: data.lists,
+        now: data.now,
+      });
+    } catch (err: any) {
+      console.error('API /api/crm/leads error:', err);
+      res.status(err.status || 500).json({ error: err.message || 'Could not load leads.' });
+    }
+  });
+
+  app.get('/api/crm/timeline', async (req, res) => {
+    try {
+      const u = await authenticate(req);
+      if (!u) return res.status(401).json({ error: 'Unauthorized' });
+      if (!canUseCrm(u)) return res.status(403).json({ error: 'The CRM is not available for your role.' });
+      const enq = String(req.query.enq || '');
+      const [data, all] = await Promise.all([getCrmData(), getCachedSalespersons()]);
+      if (!crmScope(u, data.leads, all).some((l: any) => l.enquiryNo === enq)) return res.status(403).json({ error: 'Not your lead.' });
+      const t = await callCrm({ action: 'timeline', enquiryNo: enq });
+      res.json({ timeline: t.timeline });
+    } catch (err: any) {
+      console.error('API /api/crm/timeline error:', err);
+      res.status(err.status || 500).json({ error: err.message || 'Could not load the timeline.' });
+    }
+  });
+
+  // ---- CRM: every change goes through here so the rules are checked on the server
+  app.post('/api/crm/action', async (req, res) => {
+    try {
+      const u = await authenticate(req);
+      if (!u) return res.status(401).json({ error: 'Unauthorized' });
+      if (!canUseCrm(u)) return res.status(403).json({ error: 'The CRM is not available for your role.' });
+      const b = req.body || {};
+      const team = crmTeam(u);
+      const admin = isCrmAdmin(u);
+      const all = await getCachedSalespersons();
+      const by = { byId: u.id, byName: u.name };
+
+      if (b.action === 'set-available') {
+        const target = b.id || u.id;
+        const managedIds = new Set(getManagedSalespeople(u, all).map((s: any) => s.id));
+        if (target !== u.id && !admin && !managedIds.has(target)) return res.status(403).json({ error: 'Not allowed.' });
+        await callCrm({ action: 'set-available', id: target, present: !!b.present });
+        crmCache = null;
+        return res.json({ ok: true });
+      }
+
+      if (b.action === 'add-enquiry') {
+        if (!admin && !['NBD', 'Sales', 'Manager'].includes(team)) return res.status(403).json({ error: 'You cannot add enquiries.' });
+        const f = b.fields || {};
+        const out = await callCrm({ action: 'add-enquiry', ...by, decision: b.decision, fields: f });
+        crmCache = null;
+        return res.json(out);
+      }
+
+      // everything below works on one existing lead the person may see
+      const data = await getCrmData(true);
+      const lead = data.leads.find((l: any) => l.enquiryNo === b.enquiryNo);
+      if (!lead) return res.status(404).json({ error: 'Lead not found.' });
+      const managedIds = new Set(getManagedSalespeople(u, all).map((s: any) => s.id));
+      const isOwner = lead.ownerId === u.id;
+      const isMine = isOwner || (team === 'NBD' && !lead.ownerId);
+      const isBoss = admin || managedIds.has(lead.ownerId);
+
+      switch (b.action) {
+        case 'log-activity':
+        case 'mark-invalid':
+        case 'mark-lost':
+        case 'reopen':
+          if (!isMine && !isBoss) return res.status(403).json({ error: 'This lead is not with you.' });
+          break;
+        case 'align':
+          if (!admin && !(isOwner && team === 'NBD')) return res.status(403).json({ error: 'Only the NBD owner can align a lead.' });
+          break;
+        case 'send-back':
+          if (!admin && !(isOwner && team === 'Sales')) return res.status(403).json({ error: 'Only the salesperson who has the lead can send it back.' });
+          break;
+        case 'reassign':
+          if (!isBoss) return res.status(403).json({ error: 'Only a manager can reassign.' });
+          break;
+        default:
+          return res.status(400).json({ error: 'Unknown action.' });
+      }
+      const out = await callCrm({
+        action: b.action, ...by, enquiryNo: lead.enquiryNo, type: b.type, text: b.text, stage: b.stage,
+        nextFollowUp: b.nextFollowUp, reason: b.reason, toId: b.toId, meetingDate: b.meetingDate, meetingTime: b.meetingTime,
+      });
+      crmCache = null;
+      res.json(out);
+    } catch (err: any) {
+      console.error('API /api/crm/action error:', err);
+      res.status(err.status || 500).json({ error: err.message || 'Could not save.' });
     }
   });
 
