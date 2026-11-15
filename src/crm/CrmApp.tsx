@@ -74,7 +74,7 @@ export function CrmApp() {
 
   const open = (enq: string) => { setSelected(enq); if (tab === 'add') setTab('leads'); };
   const toggleAvail = async (on: boolean) => {
-    try { await crmAction({ action: 'set-available', available: on }); await load(true); } catch (e: any) { setError(e.message); }
+    try { await crmAction({ action: 'set-available', present: on }); await load(true); } catch (e: any) { setError(e.message); }
   };
 
   if (!data && error) return <div className="p-6 max-w-md mx-auto"><div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm p-4">{error}</div><button className={`${btnGhost} mt-3`} onClick={() => load(true)}>Try again</button></div>;

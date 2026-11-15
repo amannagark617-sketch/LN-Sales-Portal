@@ -4,7 +4,7 @@ import { crmAction, fetchTimeline, CrmData } from './api';
 import { Lead, TimelineEntry, STAGES } from './constants';
 import { Field, inputCls, areaCls, btnPrimary, btnGhost, DateField, Tag, fullName, shortDate, todayStr } from './ui';
 
-type Mode = null | 'log' | 'align' | 'back' | 'invalid' | 'lost' | 'reassign' | 'reopen';
+type Status = 'Open' | 'Lost' | 'Invalid' | 'Closed';
 
 function Info({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
@@ -24,27 +24,33 @@ function when(t: string): string {
 
 export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void }) {
   const me = data.me;
-  const [mode, setMode] = useState<Mode>(null);
+  const [panel, setPanel] = useState<null | 'update' | 'reopen' | 'reassign'>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [f, setF] = useState({ type: 'Call', text: '', stage: '', next: '', toId: '', date: '', time: '', reason: '' });
-  const set = (k: keyof typeof f, v: string) => setF(p => ({ ...p, [k]: v }));
+  const blank = { status: 'Open' as Status, stage: '', text: '', next: '', align: false, back: false, toId: '', date: '', time: '', reason: '', opf: '', value: '' };
+  const [f, setF] = useState(blank);
+  const set = (k: keyof typeof blank, v: any) => setF(p => ({ ...p, [k]: v }));
 
   const loadTimeline = () => fetchTimeline(lead.enquiryNo).then(setTimeline).catch(() => setTimeline([]));
-  useEffect(() => { setMode(null); setError(''); setTimeline(null); setF({ type: 'Call', text: '', stage: '', next: '', toId: '', date: '', time: '', reason: '' }); loadTimeline(); }, [lead.enquiryNo]);
+  useEffect(() => { setPanel(null); setError(''); setTimeline(null); setF(blank); loadTimeline(); }, [lead.enquiryNo]);
 
   const isOwner = lead.ownerId === me.id;
   const isMine = isOwner || (me.team === 'NBD' && !lead.ownerId);
   const boss = me.admin || me.isManager || me.team === 'Manager';
   const open = lead.outcome === 'Open';
+  const canUpdate = open && (isMine || boss);
+  const canAlign = open && lead.ownerTeam === 'NBD' && (isOwner || me.admin);
+  const canBack = open && lead.ownerTeam === 'Sales' && (isOwner || me.admin);
+  const canReopen = !open && lead.outcome !== 'Closed' && (isMine || boss);
+  const overdue = open && lead.nextFollowUp && lead.nextFollowUp < todayStr();
 
   const run = async (body: Record<string, any>) => {
     setBusy(true); setError('');
     try {
       await crmAction({ enquiryNo: lead.enquiryNo, ...body });
-      setMode(null);
-      setF(p => ({ ...p, text: '', next: '', date: '', time: '', reason: '' }));
+      setPanel(null);
+      setF(blank);
       await onChanged();
       await loadTimeline();
     } catch (e: any) {
@@ -54,16 +60,18 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
     }
   };
 
-  const actions: { id: Exclude<Mode, null>; label: string }[] = [];
-  if (open && (isMine || boss)) actions.push({ id: 'log', label: 'Log update' });
-  if (open && ((isOwner && me.team === 'NBD') || me.admin)) actions.push({ id: 'align', label: 'Align to salesperson' });
-  if (open && ((isOwner && me.team === 'Sales') || me.admin)) actions.push({ id: 'back', label: 'Send back to NBD' });
-  if (open && (isMine || boss)) { actions.push({ id: 'invalid', label: 'Mark invalid' }); actions.push({ id: 'lost', label: 'Mark lost' }); }
-  if (open && boss) actions.push({ id: 'reassign', label: 'Reassign' });
-  if (!open && lead.outcome !== 'Closed' && (isMine || boss)) actions.push({ id: 'reopen', label: 'Reopen' });
+  const save = () => {
+    if (f.status === 'Lost') return run({ action: 'mark-lost', reason: f.reason, text: f.text });
+    if (f.status === 'Invalid') return run({ action: 'mark-invalid', reason: f.reason, text: f.text });
+    if (f.status === 'Closed') return run({ action: 'close-lead', opf: f.opf, orderValue: f.value, text: f.text });
+    if (f.align) return run({ action: 'align', toId: f.toId, meetingDate: f.date, meetingTime: f.time, text: f.text });
+    if (f.back) return run({ action: 'send-back', toId: f.toId, text: f.text, nextFollowUp: f.next });
+    return run({ action: 'log-activity', type: 'Follow-up', text: f.text, stage: f.stage || (lead.stage === 'New' ? 'Contacted' : lead.stage), nextFollowUp: f.next });
+  };
 
   const digits = lead.phone.replace(/\D/g, '').slice(-10);
   const people = [...data.nbd.map(n => ({ id: n.id, name: `${n.name} (NBD)` })), ...data.sales.map(s => ({ id: s.id, name: `${s.name} (${s.showroom || s.region})` }))];
+  const statuses: Status[] = ['Open', 'Lost', 'Invalid', 'Closed'];
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -84,6 +92,133 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
         {lead.email ? <a href={`mailto:${lead.email}`} className={btnGhost}><Mail size={16} /> Email</a> : <span />}
       </div>
 
+      {open && (
+        <div className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${overdue ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div>
+            <div className="text-[11px] font-bold text-slate-500">Planned follow-up</div>
+            <div className={`text-base font-extrabold ${overdue ? 'text-rose-700' : 'text-slate-900'}`}>{lead.nextFollowUp ? shortDate(lead.nextFollowUp) : 'Not set'}{overdue ? ' · Overdue' : ''}</div>
+          </div>
+          {canUpdate && <button onClick={() => { setPanel(panel === 'update' ? null : 'update'); setError(''); }} className={btnPrimary}>Update status</button>}
+        </div>
+      )}
+
+      {(canUpdate && panel === 'update') && (
+        <div className="p-4 border-b border-slate-100 space-y-3">
+          <div className="grid grid-cols-4 border border-slate-300 rounded-lg overflow-hidden">
+            {statuses.map(s => (
+              <button key={s} onClick={() => setF(p => ({ ...p, status: s, reason: '' }))}
+                className={`h-11 text-sm font-bold border-r border-slate-300 last:border-r-0 ${f.status === s ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{s}</button>
+            ))}
+          </div>
+
+          {f.status === 'Open' && (
+            <>
+              {!f.align && !f.back && (
+                <Field label="Stage">
+                  <select className={inputCls} value={f.stage || (lead.stage === 'New' ? 'Contacted' : lead.stage)} onChange={e => set('stage', e.target.value)}>
+                    {STAGES.filter(s => s !== 'New' && s !== 'Converted').map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </Field>
+              )}
+              <Field label="Remarks" required><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What did the customer say?" /></Field>
+              {!f.align && <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>}
+              {canAlign && (
+                <label className="flex items-center gap-3 text-sm font-bold text-slate-800 min-h-[44px]">
+                  <input type="checkbox" className="h-5 w-5" checked={f.align} onChange={e => setF(p => ({ ...p, align: e.target.checked, toId: '' }))} />
+                  Align to a salesperson
+                </label>
+              )}
+              {canAlign && f.align && (
+                <div className="space-y-3">
+                  <Field label="Salesperson" required>
+                    <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
+                      <option value="">Select salesperson</option>
+                      {data.sales.map(s => <option key={s.id} value={s.id}>{s.name} · {s.showroom || s.region}</option>)}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Meeting date" required><input type="date" className={inputCls} min={todayStr()} value={f.date} onChange={e => set('date', e.target.value)} /></Field>
+                    <Field label="Meeting time"><input type="time" className={inputCls} value={f.time} onChange={e => set('time', e.target.value)} /></Field>
+                  </div>
+                </div>
+              )}
+              {canBack && (
+                <label className="flex items-center gap-3 text-sm font-bold text-slate-800 min-h-[44px]">
+                  <input type="checkbox" className="h-5 w-5" checked={f.back} onChange={e => setF(p => ({ ...p, back: e.target.checked, toId: '' }))} />
+                  Send back to NBD
+                </label>
+              )}
+              {canBack && f.back && (
+                <Field label="Send to" hint={lead.nbdName ? `Default: ${lead.nbdName}, who had it before` : undefined}>
+                  <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
+                    <option value="">{lead.nbdName ? `${lead.nbdName} (same NBD)` : 'Next NBD in rotation'}</option>
+                    {data.nbd.filter(n => n.id !== lead.nbdId).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                  </select>
+                </Field>
+              )}
+            </>
+          )}
+
+          {(f.status === 'Lost' || f.status === 'Invalid') && (
+            <>
+              <Field label="Reason" required>
+                <select className={inputCls} value={f.reason} onChange={e => set('reason', e.target.value)}>
+                  <option value="">Select reason</option>
+                  {(f.status === 'Invalid' ? data.lists.InvalidReason : data.lists.LostReason).map(r => <option key={r}>{r}</option>)}
+                </select>
+              </Field>
+              <Field label="Remarks"><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
+            </>
+          )}
+
+          {f.status === 'Closed' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="OPF number" required><input className={inputCls} value={f.opf} onChange={e => set('opf', e.target.value)} /></Field>
+                <Field label="Order value" required><input className={inputCls} inputMode="numeric" value={f.value} onChange={e => set('value', e.target.value.replace(/[^\d.]/g, ''))} /></Field>
+              </div>
+              <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
+            </>
+          )}
+
+          <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+        </div>
+      )}
+
+      {canReopen && (
+        <div className="p-4 border-b border-slate-100 space-y-3">
+          {panel !== 'reopen'
+            ? <button className={btnGhost} onClick={() => { setPanel('reopen'); setError(''); }}>Reopen lead</button>
+            : (
+              <>
+                <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} placeholder="Why is it back?" /></Field>
+                <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>
+                <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reopen', nextFollowUp: f.next, text: f.text })}>{busy ? 'Saving…' : 'Reopen lead'}</button>
+              </>
+            )}
+        </div>
+      )}
+
+      {open && boss && (
+        <div className="px-4 py-3 border-b border-slate-100 space-y-3">
+          <button className="text-xs font-bold text-slate-600 underline" onClick={() => { setPanel(panel === 'reassign' ? null : 'reassign'); setError(''); }}>Reassign this lead</button>
+          {panel === 'reassign' && (
+            <div className="space-y-3">
+              <Field label="New owner" required>
+                <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
+                  <option value="">Select person</option>
+                  {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
+              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reassign', toId: f.toId, text: f.text })}>{busy ? 'Saving…' : 'Reassign'}</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && <div className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+
       <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-slate-100">
         <Info label="Phone" value={lead.phone} />
         <Info label="Email" value={lead.email} />
@@ -94,112 +229,10 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
         <Info label="Segment" value={lead.segment} />
         <Info label="Company" value={[lead.company, lead.designation].filter(Boolean).join(', ')} />
         <Info label="Campaign" value={[lead.utmMedium, lead.utmCampaign].filter(Boolean).join(' · ')} />
-        <Info label="Next follow-up" value={open ? shortDate(lead.nextFollowUp) : ''} />
         <Info label="Meeting" value={lead.meetingDate ? `${shortDate(lead.meetingDate)} ${lead.meetingTime}`.trim() : ''} />
         <Info label={lead.outcome === 'Closed' ? 'OPF and value' : 'Reason'} value={lead.outcome === 'Closed' ? [lead.opf, lead.orderValue].filter(Boolean).join(' · ') : lead.reason} />
         <div className="col-span-2"><Info label="Notes" value={lead.notes} /></div>
       </div>
-
-      {actions.length > 0 && (
-        <div className="p-4 border-b border-slate-100 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {actions.map(a => (
-              <button key={a.id} onClick={() => { setMode(mode === a.id ? null : a.id); setError(''); }}
-                className={`h-10 px-3 rounded-lg border text-xs font-bold ${mode === a.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'}`}>
-                {a.label}
-              </button>
-            ))}
-          </div>
-
-          {mode === 'log' && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="What happened">
-                  <select className={inputCls} value={f.type} onChange={e => set('type', e.target.value)}>
-                    {['Call', 'WhatsApp', 'Meeting', 'Follow-up', 'Note'].map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </Field>
-                <Field label="Stage">
-                  <select className={inputCls} value={f.stage} onChange={e => set('stage', e.target.value)}>
-                    <option value="">Keep {lead.stage}</option>
-                    {STAGES.filter(s => s !== 'Converted').map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </Field>
-              </div>
-              <Field label="Notes" required><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What did the customer say?" /></Field>
-              <Field label="Next follow-up" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>
-              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'log-activity', type: f.type, text: f.text, stage: f.stage, nextFollowUp: f.next })}>{busy ? 'Saving…' : 'Save update'}</button>
-            </div>
-          )}
-
-          {mode === 'align' && (
-            <div className="space-y-3">
-              <Field label="Salesperson" required>
-                <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                  <option value="">Select salesperson</option>
-                  {data.sales.map(s => <option key={s.id} value={s.id}>{s.name} · {s.showroom || s.region}</option>)}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Meeting date" required><input type="date" className={inputCls} min={todayStr()} value={f.date} onChange={e => set('date', e.target.value)} /></Field>
-                <Field label="Meeting time"><input type="time" className={inputCls} value={f.time} onChange={e => set('time', e.target.value)} /></Field>
-              </div>
-              <Field label="Note for the salesperson"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
-              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'align', toId: f.toId, meetingDate: f.date, meetingTime: f.time, text: f.text })}>{busy ? 'Saving…' : 'Align lead'}</button>
-            </div>
-          )}
-
-          {mode === 'back' && (
-            <div className="space-y-3">
-              <Field label="Note for NBD" required><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What should NBD do next?" /></Field>
-              <Field label="Next follow-up" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>
-              <Field label="Send to" hint={lead.nbdName ? `Default: ${lead.nbdName}, who had it before` : undefined}>
-                <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                  <option value="">{lead.nbdName ? `${lead.nbdName} (same NBD)` : 'Next NBD in rotation'}</option>
-                  {data.nbd.filter(n => n.id !== lead.nbdId).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
-                </select>
-              </Field>
-              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'send-back', toId: f.toId, text: f.text, nextFollowUp: f.next })}>{busy ? 'Saving…' : 'Send back to NBD'}</button>
-            </div>
-          )}
-
-          {(mode === 'invalid' || mode === 'lost') && (
-            <div className="space-y-3">
-              <Field label="Reason" required>
-                <select className={inputCls} value={f.reason} onChange={e => set('reason', e.target.value)}>
-                  <option value="">Select reason</option>
-                  {(mode === 'invalid' ? data.lists.InvalidReason : data.lists.LostReason).map(r => <option key={r}>{r}</option>)}
-                </select>
-              </Field>
-              <Field label="Notes"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
-              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: mode === 'invalid' ? 'mark-invalid' : 'mark-lost', reason: f.reason, text: f.text })}>{busy ? 'Saving…' : mode === 'invalid' ? 'Mark invalid' : 'Mark lost'}</button>
-            </div>
-          )}
-
-          {mode === 'reassign' && (
-            <div className="space-y-3">
-              <Field label="New owner" required>
-                <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                  <option value="">Select person</option>
-                  {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Note"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
-              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reassign', toId: f.toId, text: f.text })}>{busy ? 'Saving…' : 'Reassign'}</button>
-            </div>
-          )}
-
-          {mode === 'reopen' && (
-            <div className="space-y-3">
-              <Field label="Next follow-up" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>
-              <Field label="Why is it back?"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
-              <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reopen', nextFollowUp: f.next, text: f.text })}>{busy ? 'Saving…' : 'Reopen lead'}</button>
-            </div>
-          )}
-
-          {error && <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
-        </div>
-      )}
 
       <div className="p-4">
         <h3 className="text-sm font-bold text-slate-800 mb-3">Timeline</h3>

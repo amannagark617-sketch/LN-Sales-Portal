@@ -657,11 +657,13 @@ function actionReassign_(b, team) {
 
 function actionClose_(b) {
   var l = findLead_(b.enquiryNo);
+  if (l.outcome !== 'Open') fail_('This lead is ' + l.outcome);
+  if (!str_(b.opf) || !str_(b.orderValue)) fail_('OPF number and order value are required');
   closeOpenStep_(l.enquiryNo);
   l.outcome = 'Closed'; l.stage = 'Converted'; l.opf = str_(b.opf); l.orderValue = str_(b.orderValue);
   l.nextFollowUp = ''; l.updatedAt = now_();
   writeLead_(l);
-  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Closed', 'Sale reported. OPF ' + l.opf + ', value ' + l.orderValue, '', '', '');
+  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Closed', 'Sale reported. OPF ' + l.opf + ', value ' + l.orderValue + (str_(b.text) ? '. ' + str_(b.text) : ''), '', '', '');
   return { ok: true };
 }
 

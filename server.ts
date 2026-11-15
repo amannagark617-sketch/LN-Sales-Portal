@@ -1649,6 +1649,7 @@ async function startServer() {
         case 'log-activity':
         case 'mark-invalid':
         case 'mark-lost':
+        case 'close-lead':
         case 'reopen':
           if (!isMine && !isBoss) return res.status(403).json({ error: 'This lead is not with you.' });
           break;
@@ -1666,7 +1667,7 @@ async function startServer() {
       }
       const out = await callCrm({
         action: b.action, ...by, enquiryNo: lead.enquiryNo, type: b.type, text: b.text, stage: b.stage,
-        nextFollowUp: b.nextFollowUp, reason: b.reason, toId: b.toId, meetingDate: b.meetingDate, meetingTime: b.meetingTime,
+        nextFollowUp: b.nextFollowUp, reason: b.reason, toId: b.toId, meetingDate: b.meetingDate, meetingTime: b.meetingTime, opf: b.opf, orderValue: b.orderValue,
       });
       crmCache = null;
       res.json(out);
