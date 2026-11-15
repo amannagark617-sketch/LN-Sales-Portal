@@ -1,19 +1,9 @@
-/**
- * Little Nap CRM: Google Apps Script
- *
- * Bind this to the blank "Little Nap CRM" Google Sheet (Extensions > Apps Script).
- * 1. Paste this file, set the timezone to Asia/Kolkata (Project Settings).
- * 2. Run setup() once. It creates the tabs, a secret key and the triggers.
- * 3. Deploy > New deployment > Web app: Execute as Me, access Anyone. Send the Web app URL.
- * 4. Project Settings > Script properties: copy CRM_KEY into the hosting setting CRM_SCRIPT_KEY.
- */
-
 var SALE_REPORT_ID = '1-K_S1HXjca8dy0Sbl2qN7ts_e_YnKg5fBVSmaHB8kgU';
 var LEAD_SHEET_ID = '13DxQgqHFYXd2YIQ6eO0uscJ_LOENpRw59msxk5cIg4U';
-var LEAD_SHEET_GID = 1382477988;   // the tab with Enquiry ID in column A
-var APP_PREFIX = 'LNS';     // leads added inside the app: LNS-01, LNS-02 ...
-var FIRST_CALL_HOURS = 2;   // planned time of the first call after a lead arrives
-var MAX_PER_RUN = 60;       // online leads handled per minute
+var LEAD_SHEET_GID = 1382477988;
+var APP_PREFIX = 'LNS';
+var FIRST_CALL_HOURS = 2;
+var MAX_PER_RUN = 60;
 
 var LEAD_COLS = ['enquiryNo', 'createdAt', 'channel', 'sourceRef', 'source', 'group', 'segment', 'title', 'firstName', 'lastName',
   'company', 'designation', 'phone', 'phoneKey', 'email', 'city', 'state', 'zone', 'requirement', 'quantity', 'notes',
@@ -63,8 +53,6 @@ var CITY_ALIAS = {
   'bangalore': 'Karnataka', 'bengaluru': 'Karnataka', 'hyderabad': 'Telangana', 'chennai': 'Tamil Nadu',
   'mumbai': 'Maharashtra', 'pune': 'Maharashtra', 'ahmedabad': 'Gujarat', 'kolkata': 'West Bengal'
 };
-
-/* ---------------------------------------------------------------- setup */
 
 function setup() {
   ensureTabs_();
@@ -123,8 +111,6 @@ function buildCityMap() {
   if (out.length) sh.getRange(2, 1, out.length, 2).setValues(out);
 }
 
-/* -------------------------------------------------------------- helpers */
-
 function tz_() { return Session.getScriptTimeZone() || 'Asia/Kolkata'; }
 function now_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HH:mm:ss'); }
 function today_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'); }
@@ -145,7 +131,6 @@ function withLock_(fn) {
   try { return fn(); } finally { lock.releaseLock(); }
 }
 
-/** Adds a row at the bottom. Grows the sheet in blocks and keeps every cell as plain text so dates and phone numbers are never changed. */
 function appendRow_(sh, values) {
   var row = sh.getLastRow() + 1;
   if (row > sh.getMaxRows()) {
@@ -178,8 +163,6 @@ function addTimeline_(enq, by, type, text, nextFollowUp, fromName, toName) {
   appendRow_(tab_('Timeline'), row);
 }
 
-/* ------------------------------------------------------ planned vs actual */
-
 function closeOpenStep_(enq) {
   var sh = tab_('PlannedActual'), n = sh.getLastRow();
   if (n < 2) return;
@@ -199,9 +182,6 @@ function openStep_(enq, step, ownerName, planned) {
   appendRow_(tab_('PlannedActual'), [enq, step, ownerName || '', planned || '', '', '']);
 }
 
-/* --------------------------------------------------------------- lists */
-
-/** Dropdown lists live in the Lists tab so the back office can edit them. Source rows carry a group: NBD (new lead, goes to NBD) or Direct (stays with whoever adds it). */
 function readLists_() {
   var sh = tab_('Lists'), n = sh.getLastRow(), out = {};
   Object.keys(DEFAULT_LISTS).forEach(function (k) { out[k] = []; });
@@ -217,8 +197,6 @@ function groupOf_(source) {
   for (var i = 0; i < list.length; i++) if (list[i].name.toLowerCase() === s) return list[i].group;
   return 'NBD';
 }
-
-/* ---------------------------------------------------------------- team */
 
 function readTeam_() {
   var sh = SpreadsheetApp.openById(SALE_REPORT_ID).getSheetByName('ID Password');
@@ -253,7 +231,6 @@ function setAvailable_(id, present) {
   sh.getRange(row, 1, 1, 3).setValues([[id, present ? 'Yes' : 'No', now_()]]);
 }
 
-/** Next NBD person in rotation. Skips people who are inactive or marked not present. Returns null when nobody can take it. */
 function pickNbd_(team, excludeId) {
   var avail = availability_();
   var list = team.filter(function (m) { return m.team === 'NBD' && m.active && avail[m.id] !== false && m.id !== excludeId; });
@@ -274,17 +251,12 @@ function setOwner_(lead, m) {
   if (m && m.team === 'NBD') { lead.nbdId = m.id; lead.nbdName = m.name; }
 }
 
-/* ---------------------------------------------------------------- numbers */
-
-/** Online leads use the Enquiry ID that is already in the lead sheet (LNO-1, LNO-2 ...). Leads added in the app get LNS-1, LNS-2 ... */
 function nextEnquiryNo_() {
   var props = PropertiesService.getScriptProperties();
   var n = Number(props.getProperty('ENQ_APP') || '0') + 1;
   props.setProperty('ENQ_APP', String(n));
   return APP_PREFIX + '-' + (n < 10 ? '0' + n : String(n));
 }
-
-/* --------------------------------------------------------------- location */
 
 function loadCityMap_() {
   var sh = tab_('CityMap'), n = sh.getLastRow(), map = {};
@@ -313,8 +285,6 @@ function matchLocation_(text, cityMap) {
   out.zone = ZONE_OF_STATE[out.state] || '';
   return out;
 }
-
-/* ------------------------------------------------------------ lead intake */
 
 function newLead_(f, team, how) {
   var cityMap = loadCityMap_();
@@ -363,7 +333,6 @@ function parseDetected_(s) {
   return m[3] + '-' + mon + '-' + ('0' + m[1]).slice(-2);
 }
 
-/** Column positions in the lead sheet, found by header name so a new column in front never breaks the sync. */
 function feedCols_(headerRow) {
   var map = {};
   headerRow.forEach(function (h, i) { map[str_(h).toLowerCase()] = i; });
@@ -377,8 +346,6 @@ function feedCols_(headerRow) {
   return cols;
 }
 
-/** Runs every minute. Picks up new rows of the lead sheet, assigns them to NBD, and creates the lead with the sheet's own Enquiry ID.
- *  Nothing is written back to the lead sheet. */
 function syncOnlineLeads() {
   withLock_(function () {
     var props = PropertiesService.getScriptProperties();
@@ -408,7 +375,7 @@ function syncOnlineLeads() {
       for (var i = done - 1; i < vals.length && handled < MAX_PER_RUN; i++) {
         var r = vals[i];
         var enq = str_(r[C.enq]);
-        if (!enq) break; // the Enquiry ID is not filled in yet: wait for it
+        if (!enq) break;
         var key = (C.key !== undefined && str_(r[C.key])) || (C.id !== undefined ? 'L-' + str_(r[C.id]) : enq);
         var detected = parseDetected_(r[C.detected]);
         var rowNo = i + 2;
@@ -452,7 +419,6 @@ function syncOnlineLeads() {
   });
 }
 
-/** Leads that had nobody to go to are given out as soon as an NBD person is present. */
 function assignWaiting_() {
   var leads = readLeads_().filter(function (l) { return l.outcome === 'Open' && !l.ownerId && l.group === 'NBD'; });
   if (!leads.length) return;
@@ -468,7 +434,6 @@ function assignWaiting_() {
   });
 }
 
-/** Open leads of someone who left (Active = No) go back to NBD. */
 function hourlyMaintenance() {
   withLock_(function () {
     var team = readTeam_();
@@ -486,8 +451,6 @@ function hourlyMaintenance() {
     });
   });
 }
-
-/* ------------------------------------------------------------- web app */
 
 function doPost(e) {
   try {
