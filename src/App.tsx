@@ -376,7 +376,7 @@ function MainContent() {
                       }`}
                     >
                       <Users size={15} />
-                      <span>Leads</span>
+                      <span>CRM</span>
                     </button>
                   )}
 
