@@ -181,7 +181,9 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
             </>
           )}
 
-          <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+          <div className="sticky bottom-16 md:bottom-0 bg-white pt-2 pb-1 -mb-1 z-10">
+            <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+          </div>
         </div>
       )}
 

@@ -161,7 +161,7 @@ export function CrmApp() {
       ) : (
         <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-5 items-start">
           <div className={lead ? 'hidden md:block' : ''}>{tab === 'today' ? todayView : leadsView}</div>
-          <div className={`${lead ? '' : 'hidden md:block'} md:sticky md:top-4`}>
+          <div className={`${lead ? '' : 'hidden md:block'} md:sticky md:top-44 md:max-h-[calc(100vh-12rem)] md:overflow-y-auto md:rounded-xl`}>
             {lead
               ? <LeadPanel lead={lead} data={data} onChanged={() => load(true)} onClose={() => setSelected(null)} />
               : <div className="hidden md:block bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">Select a lead to see details and update it.</div>}
