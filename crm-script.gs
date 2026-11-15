@@ -13,7 +13,7 @@ var LEAD_COLS = ['enquiryNo', 'createdAt', 'channel', 'sourceRef', 'source', 'gr
   'reason', 'nextFollowUp', 'meetingDate', 'meetingTime', 'opf', 'orderValue', 'updatedAt'];
 var TL_COLS = ['time', 'enquiryNo', 'byId', 'byName', 'type', 'text', 'nextFollowUp', 'fromName', 'toName'];
 var PA_COLS = ['enquiryNo', 'step', 'owner', 'planned', 'actual', 'delayMinutes'];
-var DEFAULT_LISTS = {
+var LISTS = {
   Source: [
     ['Meta', 'NBD'], ['Google', 'NBD'], ['Google Search', 'NBD'], ['Google Demand Gen', 'NBD'], ['Website', 'NBD'], ['WhatsApp BOT', 'NBD'],
     ['WhatsApp (Marketing Department)', 'NBD'], ['Popin', 'NBD'], ['IVR', 'NBD'], ['Facebook', 'NBD'], ['Instagram', 'NBD'], ['Linkedin', 'NBD'],
@@ -70,7 +70,7 @@ function setup() {
 
 function ensureTabs_() {
   var ss = SpreadsheetApp.getActive();
-  [['Leads', LEAD_COLS], ['Timeline', TL_COLS], ['PlannedActual', PA_COLS], ['Availability', ['id', 'present', 'updatedAt']], ['CityMap', ['city', 'state']], ['Lists', ['list', 'value', 'group']]]
+  [['Leads', LEAD_COLS], ['Timeline', TL_COLS], ['PlannedActual', PA_COLS], ['Availability', ['id', 'present', 'updatedAt']], ['CityMap', ['city', 'state']]]
     .forEach(function (d) {
       var sh = ss.getSheetByName(d[0]) || ss.insertSheet(d[0]);
       if (sh.getRange(1, 1).getValue() !== d[1][0]) {
@@ -79,14 +79,6 @@ function ensureTabs_() {
       }
       sh.getRange(1, 1, sh.getMaxRows(), d[1].length).setNumberFormat('@');
     });
-  var ls = ss.getSheetByName('Lists');
-  if (ls.getLastRow() < 2) {
-    var rows = [];
-    Object.keys(DEFAULT_LISTS).forEach(function (k) {
-      DEFAULT_LISTS[k].forEach(function (v) { rows.push(Array.isArray(v) ? [k, v[0], v[1]] : [k, v, '']); });
-    });
-    ls.getRange(2, 1, rows.length, 3).setValues(rows);
-  }
   var def = ss.getSheetByName('Sheet1');
   if (def && ss.getSheets().length > 1 && def.getLastRow() === 0) ss.deleteSheet(def);
 }
@@ -185,12 +177,9 @@ function openStep_(enq, step, ownerName, planned) {
 }
 
 function readLists_() {
-  var sh = tab_('Lists'), n = sh.getLastRow(), out = {};
-  Object.keys(DEFAULT_LISTS).forEach(function (k) { out[k] = []; });
-  if (n >= 2) sh.getRange(2, 1, n - 1, 3).getValues().forEach(function (r) {
-    var k = str_(r[0]), v = str_(r[1]);
-    if (!k || !v || !out[k]) return;
-    out[k].push(k === 'Source' ? { name: v, group: str_(r[2]) === 'Direct' ? 'Direct' : 'NBD' } : v);
+  var out = {};
+  Object.keys(LISTS).forEach(function (k) {
+    out[k] = k === 'Source' ? LISTS[k].map(function (v) { return { name: v[0], group: v[1] }; }) : LISTS[k].slice();
   });
   return out;
 }
