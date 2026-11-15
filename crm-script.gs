@@ -328,11 +328,21 @@ function isTestLead_(name, phone, email) {
   return false;
 }
 
-function parseDetected_(s) {
-  var m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})/.exec(str_(s));
-  if (!m) return '';
-  var mon = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' }[m[2].toLowerCase()];
-  return m[3] + '-' + mon + '-' + ('0' + m[1]).slice(-2);
+function parseDetected_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
+  if (typeof v === 'number') return Utilities.formatDate(new Date(Math.round((v - 25569) * 86400000)), 'UTC', 'yyyy-MM-dd');
+  var t = str_(v);
+  if (/^\d{5}(\.\d+)?$/.test(t)) return parseDetected_(Number(t));
+  var m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})/.exec(t);
+  if (m) {
+    var mon = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' }[m[2].toLowerCase()];
+    return mon ? m[3] + '-' + mon + '-' + ('0' + m[1]).slice(-2) : '';
+  }
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = /^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/.exec(t);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return '';
 }
 
 function feedCols_(headerRow) {
@@ -653,4 +663,92 @@ function actionClose_(b) {
   writeLead_(l);
   addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Closed', 'Sale reported. OPF ' + l.opf + ', value ' + l.orderValue, '', '', '');
   return { ok: true };
+}
+
+var IMPORT_LEAD_COLS = ['Enquiry No', 'Name', 'Phone', 'Email', 'City', 'Source', 'Requirement', 'Quantity', 'Owner ID', 'NBD ID', 'Stage', 'Next Follow-up', 'Meeting Date', 'Created On', 'Status'];
+var IMPORT_REMARK_COLS = ['Enquiry No', 'Date', 'By', 'Remark'];
+
+function setupImport() {
+  var ss = SpreadsheetApp.getActive();
+  [['Import Leads', IMPORT_LEAD_COLS], ['Import Remarks', IMPORT_REMARK_COLS]].forEach(function (d) {
+    var sh = ss.getSheetByName(d[0]) || ss.insertSheet(d[0]);
+    sh.getRange(1, 1, 1, d[1].length).setValues([d[1]]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.getRange(2, 1, sh.getMaxRows() - 1, d[1].length).setNumberFormat('@');
+  });
+}
+
+function normDate_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
+  var s = str_(v);
+  if (!s) return '';
+  var m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if (m) {
+    var y = m[3].length === 2 ? '20' + m[3] : m[3];
+    return y + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  }
+  return s.slice(0, 10);
+}
+
+function importOpenLeads() {
+  withLock_(function () {
+    var ss = SpreadsheetApp.getActive();
+    var ls = ss.getSheetByName('Import Leads'), rs = ss.getSheetByName('Import Remarks');
+    if (!ls || ls.getLastRow() < 2) return;
+    var team = readTeam_();
+    var cityMap = loadCityMap_();
+    var existing = {};
+    readLeads_().forEach(function (l) { existing[l.enquiryNo] = true; });
+    var remarks = {};
+    if (rs && rs.getLastRow() > 1) {
+      rs.getRange(2, 1, rs.getLastRow() - 1, 4).getValues().forEach(function (r) {
+        var k = str_(r[0]);
+        if (!k) return;
+        (remarks[k] = remarks[k] || []).push({ date: normDate_(r[1]), by: str_(r[2]), text: str_(r[3]) });
+      });
+    }
+    var n = ls.getLastRow() - 1;
+    var rows = ls.getRange(2, 1, n, IMPORT_LEAD_COLS.length).getValues();
+    var statusCol = IMPORT_LEAD_COLS.length;
+    rows.forEach(function (r, i) {
+      if (str_(r[statusCol - 1]) === 'Imported') return;
+      var set = function (msg) { ls.getRange(i + 2, statusCol).setValue(msg); };
+      var name = str_(r[1]);
+      if (!name && !str_(r[2])) return;
+      var pk = phoneKey_(r[2]);
+      var owner = memberById_(team, str_(r[8]));
+      var stage = str_(r[10]) || 'Contacted';
+      var next = normDate_(r[11]);
+      if (pk.length < 10) return set('Error: phone must be 10 digits');
+      if (!owner || !owner.active || (owner.team !== 'NBD' && owner.team !== 'Sales')) return set('Error: Owner ID must be an active NBD or Sales person');
+      if (STAGES.indexOf(stage) < 0 || stage === 'Converted') return set('Error: stage must be New, Contacted, Valid, Meeting, Proposal or Negotiation');
+      if (!next) return set('Error: Next Follow-up date is required');
+      var enq = str_(r[0]) || nextEnquiryNo_();
+      if (existing[enq]) return set('Error: ' + enq + ' is already in the CRM');
+      var parts = name.split(' ');
+      var first = parts.shift(), last = parts.join(' ');
+      var loc = matchLocation_(str_(r[4]), cityMap);
+      var source = str_(r[5]);
+      var created = normDate_(r[13]);
+      var lead = {
+        enquiryNo: enq, createdAt: created ? created + ' 00:00:00' : now_(), channel: 'Imported', sourceRef: '', source: source, group: groupOf_(source),
+        segment: '', title: '', firstName: first, lastName: last, company: '', designation: '', phone: str_(r[2]), phoneKey: pk, email: str_(r[3]),
+        city: str_(r[4]), state: loc.state, zone: loc.zone, requirement: str_(r[6]), quantity: str_(r[7]), notes: '', utmMedium: '', utmCampaign: '',
+        addedBy: 'Import', ownerId: '', ownerName: '', ownerTeam: '', nbdId: '', nbdName: '', stage: stage, outcome: 'Open', reason: '',
+        nextFollowUp: next, meetingDate: normDate_(r[12]), meetingTime: '', opf: '', orderValue: '', updatedAt: now_()
+      };
+      setOwner_(lead, owner);
+      var nbd = memberById_(team, str_(r[9]));
+      if (nbd && nbd.team === 'NBD' && !lead.nbdId) { lead.nbdId = nbd.id; lead.nbdName = nbd.name; }
+      appendLead_(lead);
+      var tl = tab_('Timeline');
+      (remarks[enq] || []).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).forEach(function (m) {
+        appendRow_(tl, [(m.date || today_()) + ' 00:00:00', enq, '', m.by, 'Note', m.text, '', '', '']);
+      });
+      addTimeline_(enq, null, 'Imported', 'Open lead brought in from the old Sales Engine', next, '', owner.name);
+      openStep_(enq, stage === 'New' ? 'First call' : stage, owner.name, next);
+      existing[enq] = true;
+      set('Imported');
+    });
+  });
 }
