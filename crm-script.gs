@@ -2,6 +2,8 @@ var SALE_REPORT_ID = '1-K_S1HXjca8dy0Sbl2qN7ts_e_YnKg5fBVSmaHB8kgU';
 var LEAD_SHEET_ID = '13DxQgqHFYXd2YIQ6eO0uscJ_LOENpRw59msxk5cIg4U';
 var LEAD_SHEET_GID = 1382477988;
 var APP_PREFIX = 'LNS';
+var SELF_TAB = 'Self Leads';
+var SELF_COLS = ['Enquiry No', 'Date', 'Added By', 'Added By ID', 'Source', 'Segment', 'Title', 'First Name', 'Last Name', 'Company', 'Designation', 'Phone', 'Email', 'City', 'State', 'Zone', 'Requirement', 'Quantity', 'Notes'];
 var FIRST_CALL_HOURS = 2;
 var MAX_PER_RUN = 60;
 
@@ -533,7 +535,24 @@ function actionAdd_(b, team) {
     return { ok: true, enquiryNo: target.enquiryNo, added: 'note' };
   }
   var lead = newLead_(f, team, same.length ? 'Earlier enquiry: ' + same[0].enquiryNo : '');
+  saveSelfLead_(lead, f);
   return { ok: true, enquiryNo: lead.enquiryNo, ownerName: lead.ownerName, waiting: !lead.ownerId };
+}
+
+function saveSelfLead_(lead, f) {
+  try {
+    var ss = SpreadsheetApp.openById(LEAD_SHEET_ID);
+    var sh = ss.getSheetByName(SELF_TAB);
+    if (!sh) {
+      sh = ss.insertSheet(SELF_TAB);
+      sh.getRange(1, 1, 1, SELF_COLS.length).setValues([SELF_COLS]).setFontWeight('bold');
+      sh.setFrozenRows(1);
+      sh.getRange(2, 1, sh.getMaxRows() - 1, SELF_COLS.length).setNumberFormat('@');
+    }
+    sh.appendRow([lead.enquiryNo, lead.createdAt, lead.addedBy, str_(f.addedBy), lead.source, lead.segment, lead.title, lead.firstName,
+      lead.lastName, lead.company, lead.designation, lead.phone, lead.email, lead.city, lead.state, lead.zone, lead.requirement,
+      lead.quantity, lead.notes]);
+  } catch (e) {}
 }
 
 function actionLog_(b, team) {
