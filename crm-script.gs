@@ -11,7 +11,7 @@
 var SALE_REPORT_ID = '1-K_S1HXjca8dy0Sbl2qN7ts_e_YnKg5fBVSmaHB8kgU';
 var LEAD_SHEET_ID = '13DxQgqHFYXd2YIQ6eO0uscJ_LOENpRw59msxk5cIg4U';
 var LEAD_SHEET_GID = 1382477988;   // the tab with Enquiry ID in column A
-var APP_PREFIX = 'LNS';     // leads added inside the app: LNS-1, LNS-2 ...
+var APP_PREFIX = 'LNS';     // leads added inside the app: LNS-01, LNS-02 ...
 var FIRST_CALL_HOURS = 2;   // planned time of the first call after a lead arrives
 var MAX_PER_RUN = 60;       // online leads handled per minute
 
@@ -281,7 +281,7 @@ function nextEnquiryNo_() {
   var props = PropertiesService.getScriptProperties();
   var n = Number(props.getProperty('ENQ_APP') || '0') + 1;
   props.setProperty('ENQ_APP', String(n));
-  return APP_PREFIX + '-' + n;
+  return APP_PREFIX + '-' + (n < 10 ? '0' + n : String(n));
 }
 
 /* --------------------------------------------------------------- location */
