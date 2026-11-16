@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, CalendarCheck, List, PlusCircle } from 'lucide-react';
 import { fetchCrm, crmAction, CrmData } from './api';
-import { Lead } from './constants';
+import { Lead, normStage, plannedOf, isOverdue, isDueToday, stepLabel, STAGES } from './constants';
 import { LeadRow, Section, inputCls, btnGhost, todayStr, fullName } from './ui';
 import { LeadPanel } from './LeadPanel';
 import { AddEnquiry } from './AddEnquiry';
@@ -15,15 +15,18 @@ export function CrmApp() {
   const [tab, setTab] = useState<Tab>('today');
   const [selected, setSelected] = useState<string | null>(null);
   const [q, setQ] = useState('');
-  const [fStage, setFStage] = useState('');
+  const [step, setStep] = useState('');
   const [fOwner, setFOwner] = useState('');
-  const [fOutcome, setFOutcome] = useState('Open');
   const [fSource, setFSource] = useState('');
   const loadedAt = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
     setLoading(true); setError('');
-    try { setData(await fetchCrm(refresh)); loadedAt.current = Date.now(); }
+    try {
+      const d = await fetchCrm(refresh);
+      d.leads.forEach(l => { l.stage = normStage(l.stage); });
+      setData(d); loadedAt.current = Date.now();
+    }
     catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -44,26 +47,40 @@ export function CrmApp() {
     const open = data.leads.filter(l => l.outcome === 'Open');
     const mine = open.filter(l => l.ownerId === me.id);
     const boss = me.admin || me.isManager || me.team === 'Manager';
-    const byDate = (a: Lead, b: Lead) => (a.nextFollowUp || '').localeCompare(b.nextFollowUp || '');
+    const byPlan = (a: Lead, b: Lead) => plannedOf(a).localeCompare(plannedOf(b));
+    const newest = (a: Lead, b: Lead) => (b.createdAt || '').localeCompare(a.createdAt || '');
     return {
-      waiting: open.filter(l => !l.ownerId),
-      fresh: mine.filter(l => l.stage === 'New'),
-      overdue: mine.filter(l => l.stage !== 'New' && l.nextFollowUp && l.nextFollowUp < today).sort(byDate),
-      dueToday: mine.filter(l => l.stage !== 'New' && l.nextFollowUp === today),
-      meetings: mine.filter(l => l.meetingDate && l.meetingDate >= today && l.stage === 'Meeting').sort((a, b) => a.meetingDate.localeCompare(b.meetingDate)),
-      watching: me.team === 'NBD' ? open.filter(l => l.nbdId === me.id && l.ownerId && l.ownerId !== me.id).sort(byDate) : [],
-      teamOverdue: boss ? open.filter(l => l.ownerId && l.ownerId !== me.id && l.nextFollowUp && l.nextFollowUp < today).sort(byDate) : [],
+      waiting: open.filter(l => !l.ownerId).sort(newest),
+      fresh: mine.filter(l => l.stage === 'New').sort(newest),
+      overdue: mine.filter(l => l.stage !== 'New' && isOverdue(l)).sort(byPlan),
+      dueToday: mine.filter(l => l.stage !== 'New' && isDueToday(l)).sort(byPlan),
+      meetings: mine.filter(l => l.stage === '1st meeting' && l.meetingDate && l.meetingDate >= today).sort((a, b) => a.meetingDate.localeCompare(b.meetingDate)),
+      watching: me.team === 'NBD' ? open.filter(l => l.nbdId === me.id && l.ownerId && l.ownerId !== me.id).sort(byPlan) : [],
+      teamOverdue: boss ? open.filter(l => l.ownerId && l.ownerId !== me.id && isOverdue(l)).sort(byPlan) : [],
     };
   }, [data, me, today]);
 
-  const filtered = useMemo(() => {
+  const base = useMemo(() => {
     if (!data) return [];
     const s = q.trim().toLowerCase();
     return data.leads.filter(l =>
-      (!fOutcome || l.outcome === fOutcome) && (!fStage || l.stage === fStage) && (!fOwner || l.ownerId === fOwner) && (!fSource || l.source === fSource) &&
+      (!fOwner || l.ownerId === fOwner) && (!fSource || l.source === fSource) &&
       (!s || [fullName(l), l.phone, l.enquiryNo, l.city, l.company, l.email].join(' ').toLowerCase().includes(s))
     ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [data, q, fStage, fOwner, fOutcome, fSource]);
+  }, [data, q, fOwner, fSource]);
+
+  const steps = useMemo(() => {
+    const openSteps = STAGES.filter(x => x !== 'Converted').map(st => ({ id: st, label: stepLabel(st), count: base.filter(l => l.outcome === 'Open' && l.stage === st).length }));
+    return [
+      { id: '', label: 'All open', count: base.filter(l => l.outcome === 'Open').length },
+      ...openSteps,
+      ...['Closed', 'Lost', 'Invalid'].map(o => ({ id: o, label: o, count: base.filter(l => l.outcome === o).length })),
+    ];
+  }, [base]);
+
+  const filtered = useMemo(() => base.filter(l =>
+    step === '' ? l.outcome === 'Open' : ['Closed', 'Lost', 'Invalid'].includes(step) ? l.outcome === step : l.outcome === 'Open' && l.stage === step
+  ), [base, step]);
 
   const owners = useMemo(() => {
     const m = new Map<string, string>();
@@ -112,22 +129,25 @@ export function CrmApp() {
 
   const leadsView = (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
-        <input className={`${inputCls} col-span-2 md:col-span-2`} placeholder="Search name, phone, enquiry no" value={q} onChange={e => setQ(e.target.value)} />
-        <select className={inputCls} value={fOutcome} onChange={e => setFOutcome(e.target.value)} aria-label="Status">
-          <option value="">All status</option>{['Open', 'Invalid', 'Lost', 'Closed'].map(o => <option key={o}>{o}</option>)}
-        </select>
-        <select className={inputCls} value={fStage} onChange={e => setFStage(e.target.value)} aria-label="Stage">
-          <option value="">All stages</option>{['New', 'Contacted', 'Valid', 'Meeting', 'Proposal', 'Negotiation'].map(o => <option key={o}>{o}</option>)}
-        </select>
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap">
+        {steps.map(t => (
+          <button key={t.id || 'all'} onClick={() => setStep(t.id)}
+            className={`shrink-0 min-w-[104px] text-left rounded-lg border px-3 py-2 ${step === t.id ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'}`}>
+            <div className="text-lg font-extrabold leading-tight">{t.count}</div>
+            <div className={`text-[11px] font-bold ${step === t.id ? 'text-slate-200' : 'text-slate-500'}`}>{t.label}</div>
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        <input className={`${inputCls} col-span-2`} placeholder="Search name, phone, enquiry no" value={q} onChange={e => setQ(e.target.value)} />
         <select className={inputCls} value={fOwner} onChange={e => setFOwner(e.target.value)} aria-label="Owner">
           <option value="">All owners</option>{owners.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
         </select>
-        <select className={`${inputCls} col-span-2 md:col-span-1`} value={fSource} onChange={e => setFSource(e.target.value)} aria-label="Source">
+        <select className={inputCls} value={fSource} onChange={e => setFSource(e.target.value)} aria-label="Source">
           <option value="">All sources</option>{sources.map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
-      <div className="text-xs text-slate-500 mb-2 px-1">{filtered.length} leads</div>
+      <div className="text-xs text-slate-500 mb-2 px-1">{filtered.length} leads · newest first</div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {filtered.length === 0 ? empty : list(filtered.slice(0, 200), true)}
       </div>

@@ -55,8 +55,44 @@ export function sourceGroup(source: string): 'NBD' | 'Direct' {
   return f ? f.group : 'NBD'; // anything unknown goes through NBD first
 }
 
-export const STAGES = ['New', 'Contacted', 'Valid', 'Meeting', 'Proposal', 'Negotiation', 'Converted'] as const;
+export const STAGES = ['New', 'Not connected', 'Follow-up', '1st meeting', 'Send proposal', 'Negotiation', 'Converted'] as const;
 export type Stage = typeof STAGES[number];
+export const NBD_STAGES = ['New', 'Not connected', 'Follow-up'];
+export const SALES_STAGES = ['1st meeting', 'Send proposal', 'Negotiation'];
+export const MEETING_TYPES = ['Telephonic', 'Client Visit', 'Showroom', 'Video Call'];
+const OLD_STAGES: Record<string, string> = { Contacted: 'Follow-up', Valid: 'Follow-up', Meeting: '1st meeting', Proposal: 'Send proposal' };
+export const normStage = (s: string): string => OLD_STAGES[s] || s || 'New';
+/** Shown to people: New is the first call. */
+export const stepLabel = (s: string): string => (normStage(s) === 'New' ? 'First call' : normStage(s));
+export const nextSalesStage = (s: string): string => {
+  const st = normStage(s);
+  return st === '1st meeting' ? 'Send proposal' : 'Negotiation';
+};
+
+const FIRST_CALL_HOURS = 2;
+const istNow = (): string => new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16);
+
+/** Planned follow-up for a lead. A new lead with no date is due 2 hours after it came in. */
+export function plannedOf(l: { nextFollowUp: string; stage: string; createdAt: string; ownerId: string; outcome: string }): string {
+  if (l.outcome !== 'Open') return '';
+  if (l.nextFollowUp) return l.nextFollowUp.slice(0, 16);
+  if (normStage(l.stage) !== 'New' || !l.createdAt) return '';
+  const d = new Date(l.createdAt.slice(0, 19).replace(' ', 'T') + '+05:30');
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() + FIRST_CALL_HOURS * 3600000).toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16);
+}
+
+export function isOverdue(l: Parameters<typeof plannedOf>[0]): boolean {
+  const p = plannedOf(l);
+  if (!p) return false;
+  const now = istNow();
+  return p.length > 10 ? p < now : p < now.slice(0, 10);
+}
+
+export function isDueToday(l: Parameters<typeof plannedOf>[0]): boolean {
+  const p = plannedOf(l);
+  return !!p && p.slice(0, 10) === istNow().slice(0, 10) && !isOverdue(l);
+}
 export type Outcome = 'Open' | 'Invalid' | 'Lost' | 'Closed';
 
 export const SEGMENTS = ['Retail', 'Online', 'Project', 'AV Dealers', 'Furniture Dealer', 'Franchise', 'For New Franchise', 'SIS', 'Exhibition', 'Popin'];
@@ -133,6 +169,8 @@ export interface Lead {
   opf: string;
   orderValue: string;
   updatedAt: string;
+  salesId?: string;
+  salesName?: string;
 }
 
 export interface TimelineEntry {

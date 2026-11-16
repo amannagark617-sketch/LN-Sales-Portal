@@ -1,4 +1,5 @@
 import React from 'react';
+import { stepLabel, plannedOf, isOverdue } from './constants';
 import type { Lead } from './constants';
 
 export const todayStr = (): string => new Date().toLocaleDateString('en-CA');
@@ -20,12 +21,12 @@ export function Field({ label, required, children, hint }: { label: string; requ
 }
 
 const STAGE_TONE: Record<string, string> = {
-  New: 'bg-slate-100 text-slate-700 border-slate-200',
-  Contacted: 'bg-sky-50 text-sky-800 border-sky-200',
-  Valid: 'bg-teal-50 text-teal-800 border-teal-200',
-  Meeting: 'bg-indigo-50 text-indigo-800 border-indigo-200',
-  Proposal: 'bg-amber-50 text-amber-800 border-amber-200',
-  Negotiation: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+  'First call': 'bg-slate-100 text-slate-700 border-slate-200',
+  'Not connected': 'bg-orange-50 text-orange-800 border-orange-200',
+  'Follow-up': 'bg-sky-50 text-sky-800 border-sky-200',
+  '1st meeting': 'bg-indigo-50 text-indigo-800 border-indigo-200',
+  'Send proposal': 'bg-amber-50 text-amber-800 border-amber-200',
+  Negotiation: 'bg-violet-50 text-violet-800 border-violet-200',
   Converted: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   Invalid: 'bg-slate-100 text-slate-600 border-slate-300',
   Lost: 'bg-rose-50 text-rose-800 border-rose-200',
@@ -33,7 +34,8 @@ const STAGE_TONE: Record<string, string> = {
 };
 
 export function Tag({ text }: { text: string }) {
-  return <span className={`inline-block rounded px-2 py-0.5 text-[11px] font-bold border ${STAGE_TONE[text] || STAGE_TONE.New}`}>{text}</span>;
+  const t = stepLabel(text);
+  return <span className={`inline-block rounded px-2 py-0.5 text-[11px] font-bold border whitespace-nowrap ${STAGE_TONE[t] || STAGE_TONE['First call']}`}>{t}</span>;
 }
 
 export const fullName = (l: Lead) => `${l.firstName} ${l.lastName}`.trim() || l.phone;
@@ -42,7 +44,11 @@ export function shortDate(d: string): string {
   if (!d) return '';
   const dt = new Date(d.slice(0, 10) + 'T00:00:00');
   if (isNaN(dt.getTime())) return d;
-  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const day = dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const tm = d.length >= 16 ? d.slice(11, 16) : '';
+  if (!tm) return day;
+  const [h, m] = tm.split(':').map(Number);
+  return `${day}, ${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
 }
 
 export function DateField({ value, onChange, min }: { value: string; onChange: (v: string) => void; min?: string }) {
@@ -64,7 +70,9 @@ export function DateField({ value, onChange, min }: { value: string; onChange: (
 
 /** One lead as a row: works as a tap target on a phone and as a table-like row on a desktop. */
 export function LeadRow({ lead, selected, onOpen, showOwner }: { lead: Lead; selected?: boolean; onOpen: () => void; showOwner?: boolean }) {
-  const overdue = lead.outcome === 'Open' && lead.nextFollowUp && lead.nextFollowUp < todayStr();
+  const open = lead.outcome === 'Open';
+  const planned = plannedOf(lead);
+  const overdue = isOverdue(lead);
   return (
     <button onClick={onOpen}
       className={`w-full text-left px-4 py-3 border-b border-slate-100 last:border-b-0 flex items-start gap-3 ${selected ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'}`}>
@@ -79,9 +87,9 @@ export function LeadRow({ lead, selected, onOpen, showOwner }: { lead: Lead; sel
         {showOwner && <div className="text-xs text-slate-500 mt-0.5 truncate">{lead.ownerName ? `With ${lead.ownerName}` : 'Waiting for an NBD person'}</div>}
       </div>
       <div className="text-right shrink-0 space-y-1">
-        <Tag text={lead.outcome === 'Open' ? lead.stage : lead.outcome} />
-        {lead.outcome === 'Open' && lead.nextFollowUp && (
-          <div className={`text-[11px] font-bold ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>{overdue ? 'Overdue ' : ''}{shortDate(lead.nextFollowUp)}</div>
+        <Tag text={open ? lead.stage : lead.outcome} />
+        {open && planned && (
+          <div className={`text-[11px] font-bold ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>{overdue ? 'Overdue · ' : ''}{shortDate(planned)}</div>
         )}
       </div>
     </button>

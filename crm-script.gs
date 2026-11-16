@@ -10,7 +10,7 @@ var MAX_PER_RUN = 60;
 var LEAD_COLS = ['enquiryNo', 'createdAt', 'channel', 'sourceRef', 'source', 'group', 'segment', 'title', 'firstName', 'lastName',
   'company', 'designation', 'phone', 'phoneKey', 'email', 'city', 'state', 'zone', 'requirement', 'quantity', 'notes',
   'utmMedium', 'utmCampaign', 'addedBy', 'ownerId', 'ownerName', 'ownerTeam', 'nbdId', 'nbdName', 'stage', 'outcome',
-  'reason', 'nextFollowUp', 'meetingDate', 'meetingTime', 'opf', 'orderValue', 'updatedAt'];
+  'reason', 'nextFollowUp', 'meetingDate', 'meetingTime', 'opf', 'orderValue', 'updatedAt', 'salesId', 'salesName'];
 var TL_COLS = ['time', 'enquiryNo', 'byId', 'byName', 'type', 'text', 'nextFollowUp', 'fromName', 'toName'];
 var PA_COLS = ['enquiryNo', 'step', 'owner', 'planned', 'actual', 'delayMinutes'];
 var LISTS = {
@@ -37,7 +37,24 @@ var LISTS = {
   LostReason: ['Price too high', 'Bought elsewhere', 'Not interested now', 'Not reachable', 'Postponed', 'Wrong requirement', 'Other'],
   InvalidReason: ['Wrong number', 'Fake or test enquiry', 'Not a customer (job, vendor, spam)', 'Duplicate', 'Outside service area', 'Other']
 };
-var STAGES = ['New', 'Contacted', 'Valid', 'Meeting', 'Proposal', 'Negotiation', 'Converted'];
+var STAGES = ['New', 'Not connected', 'Follow-up', '1st meeting', 'Send proposal', 'Negotiation', 'Converted'];
+var SALES_STAGES = ['1st meeting', 'Send proposal', 'Negotiation'];
+var OLD_STAGES = { 'Contacted': 'Follow-up', 'Valid': 'Follow-up', 'Meeting': '1st meeting', 'Proposal': 'Send proposal' };
+var LOG_TYPES = ['Call', 'Note', 'Follow-up', 'WhatsApp', 'Meeting', 'Telephonic', 'Client Visit', 'Showroom', 'Video Call'];
+var SCHEMA = '2';
+
+function normStage_(s) { s = str_(s); return OLD_STAGES[s] || s; }
+
+function schema_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('SCHEMA') === SCHEMA) return;
+  ensureTabs_();
+  props.setProperty('SCHEMA', SCHEMA);
+}
+
+function plannedCall_() {
+  return Utilities.formatDate(new Date(Date.now() + FIRST_CALL_HOURS * 3600000), tz_(), 'yyyy-MM-dd HH:mm');
+}
 
 var ZONE_OF_STATE = {
   'Delhi/NCR': 'North', 'Haryana': 'North', 'Punjab': 'North', 'Himachal Pradesh': 'North', 'Jammu and Kashmir': 'North', 'Ladakh': 'North',
@@ -73,7 +90,8 @@ function ensureTabs_() {
   [['Leads', LEAD_COLS], ['Timeline', TL_COLS], ['PlannedActual', PA_COLS], ['Availability', ['id', 'present', 'updatedAt']], ['CityMap', ['city', 'state']]]
     .forEach(function (d) {
       var sh = ss.getSheetByName(d[0]) || ss.insertSheet(d[0]);
-      if (sh.getRange(1, 1).getValue() !== d[1][0]) {
+      if (sh.getMaxColumns() < d[1].length) sh.insertColumnsAfter(sh.getMaxColumns(), d[1].length - sh.getMaxColumns());
+      if (sh.getRange(1, 1).getValue() !== d[1][0] || sh.getRange(1, d[1].length).getValue() !== d[1][d[1].length - 1]) {
         sh.getRange(1, 1, 1, d[1].length).setValues([d[1]]).setFontWeight('bold');
         sh.setFrozenRows(1);
       }
@@ -122,7 +140,7 @@ function jsonOut_(o) { return ContentService.createTextOutput(JSON.stringify(o))
 function withLock_(fn) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
-  try { return fn(); } finally { lock.releaseLock(); }
+  try { schema_(); return fn(); } finally { lock.releaseLock(); }
 }
 
 function appendRow_(sh, values) {
@@ -141,6 +159,7 @@ function readLeads_() {
   return vals.map(function (row, i) {
     var o = { _row: i + 2 };
     LEAD_COLS.forEach(function (c, j) { o[c] = str_(row[j]); });
+    o.stage = normStage_(o.stage);
     return o;
   });
 }
@@ -293,16 +312,17 @@ function newLead_(f, team, how) {
   var owner = null;
   if (adder && adder.active && (adder.team === 'NBD' || (adder.team === 'Sales' && lead.group === 'Direct'))) {
     owner = adder;
-    if (adder.team === 'Sales') lead.stage = 'Contacted';
+    if (adder.team === 'Sales') { lead.stage = '1st meeting'; lead.salesId = adder.id; lead.salesName = adder.name; }
+    else { lead.stage = 'Follow-up'; lead.group = 'NBD'; lead.channel = 'NBD team'; }
   } else {
     owner = pickNbd_(team);
   }
   setOwner_(lead, owner);
+  lead.nextFollowUp = lead.stage === 'New' ? (owner ? plannedCall_() : '') : (str_(f.nextFollowUp) || today_());
   appendLead_(lead);
   addTimeline_(lead.enquiryNo, adder, 'Created', 'Added from ' + (lead.source || lead.channel) + (how ? '. ' + how : ''), '', '', lead.ownerName);
   if (owner) {
-    var p = Utilities.formatDate(new Date(Date.now() + FIRST_CALL_HOURS * 3600000), tz_(), 'yyyy-MM-dd HH:mm:ss');
-    openStep_(lead.enquiryNo, 'First call', owner.name, p);
+    openStep_(lead.enquiryNo, lead.stage === 'New' ? 'First call' : lead.stage, owner.name, lead.nextFollowUp + (lead.nextFollowUp.length === 10 ? ' 18:00:00' : ':00'));
   } else {
     addTimeline_(lead.enquiryNo, null, 'Waiting', 'No NBD person available. First in line for the next one present.', '', '', '');
   }
@@ -439,10 +459,10 @@ function assignWaiting_() {
   leads.forEach(function (l) {
     var m = pickNbd_(team);
     if (!m) return;
-    setOwner_(l, m); l.updatedAt = now_();
+    setOwner_(l, m); l.updatedAt = now_(); l.nextFollowUp = plannedCall_();
     writeLead_(l);
     addTimeline_(l.enquiryNo, null, 'Assigned', 'Assigned to ' + m.name, '', '', m.name);
-    openStep_(l.enquiryNo, 'First call', m.name, Utilities.formatDate(new Date(Date.now() + FIRST_CALL_HOURS * 3600000), tz_(), 'yyyy-MM-dd HH:mm:ss'));
+    openStep_(l.enquiryNo, 'First call', m.name, l.nextFollowUp + ':00');
   });
 }
 
@@ -479,6 +499,7 @@ function publicLead_(l) { var o = {}; LEAD_COLS.forEach(function (c) { if (c !==
 function fail_(m) { throw new Error(m); }
 
 function handle_(b) {
+  schema_();
   switch (b.action) {
     case 'list': return actionList_();
     case 'timeline': return actionTimeline_(b);
@@ -569,19 +590,21 @@ function actionLog_(b, team) {
   var l = findLead_(b.enquiryNo);
   if (l.outcome !== 'Open') fail_('This lead is ' + l.outcome + '. Reopen it first.');
   var by = { id: b.byId, name: b.byName };
-  var type = ['Call', 'Note', 'Follow-up', 'WhatsApp', 'Meeting'].indexOf(b.type) >= 0 ? b.type : 'Note';
+  var type = LOG_TYPES.indexOf(b.type) >= 0 ? b.type : 'Note';
+  var stage = normStage_(b.stage);
   var next = str_(b.nextFollowUp);
   if (!next) fail_('Next follow-up date is required');
-  if (!str_(b.text)) fail_('Write what happened');
-  addTimeline_(l.enquiryNo, by, type, b.text, next, '', '');
+  var text = str_(b.text) || (stage === 'Not connected' ? 'Call not connected' : '');
+  if (!text) fail_('Write the remarks');
+  addTimeline_(l.enquiryNo, by, type, text, next, '', '');
   closeOpenStep_(l.enquiryNo);
-  if (b.stage && STAGES.indexOf(b.stage) >= 0 && b.stage !== l.stage) {
-    addTimeline_(l.enquiryNo, by, 'Stage', l.stage + ' to ' + b.stage, '', '', '');
-    l.stage = b.stage;
+  if (stage && STAGES.indexOf(stage) >= 0 && stage !== 'Converted' && stage !== l.stage) {
+    addTimeline_(l.enquiryNo, by, 'Stage', l.stage + ' to ' + stage, '', '', '');
+    l.stage = stage;
   }
   l.nextFollowUp = next; l.updatedAt = now_();
   writeLead_(l);
-  openStep_(l.enquiryNo, l.stage === 'New' ? 'Follow-up' : l.stage, l.ownerName, next);
+  openStep_(l.enquiryNo, l.stage, l.ownerName, next);
   return { ok: true };
 }
 
@@ -591,7 +614,7 @@ function actionOutcome_(b, outcome) {
   closeOpenStep_(l.enquiryNo);
   l.outcome = outcome; l.reason = str_(b.reason); l.updatedAt = now_(); l.nextFollowUp = '';
   writeLead_(l);
-  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, outcome, str_(b.reason) + (b.text ? '. ' + b.text : ''), '', '', '');
+  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, outcome, (LOG_TYPES.indexOf(b.type) >= 0 && b.type !== 'Note' ? b.type + '. ' : '') + str_(b.reason) + (b.text ? '. ' + b.text : ''), '', '', '');
   return { ok: true };
 }
 
@@ -603,7 +626,7 @@ function actionReopen_(b) {
   l.outcome = 'Open'; l.reason = ''; l.nextFollowUp = next; l.updatedAt = now_();
   writeLead_(l);
   addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Reopened', str_(b.text), next, '', '');
-  openStep_(l.enquiryNo, 'Follow-up', l.ownerName, next);
+  openStep_(l.enquiryNo, l.stage, l.ownerName, next);
   return { ok: true };
 }
 
@@ -616,11 +639,13 @@ function actionAlign_(b, team) {
   var from = l.ownerName;
   closeOpenStep_(l.enquiryNo);
   setOwner_(l, to);
-  l.stage = 'Meeting'; l.meetingDate = str_(b.meetingDate); l.meetingTime = str_(b.meetingTime);
+  l.salesId = to.id; l.salesName = to.name;
+  if (SALES_STAGES.indexOf(l.stage) < 0) l.stage = '1st meeting';
+  l.meetingDate = str_(b.meetingDate); l.meetingTime = str_(b.meetingTime);
   l.nextFollowUp = l.meetingDate; l.updatedAt = now_();
   writeLead_(l);
   addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Aligned', str_(b.text) + ' Meeting ' + l.meetingDate + (l.meetingTime ? ' ' + l.meetingTime : ''), l.meetingDate, from, to.name);
-  openStep_(l.enquiryNo, 'Meeting', to.name, l.meetingDate + (l.meetingTime ? ' ' + l.meetingTime + ':00' : ''));
+  openStep_(l.enquiryNo, l.stage, to.name, l.meetingDate + (l.meetingTime ? ' ' + l.meetingTime + ':00' : ''));
   return { ok: true, ownerName: to.name };
 }
 
@@ -630,15 +655,16 @@ function actionSendBack_(b, team) {
   if (!str_(b.text)) fail_('Add a note for NBD');
   var next = str_(b.nextFollowUp);
   if (!next) fail_('Next follow-up date is required');
-  var to = b.toId ? memberById_(team, b.toId) : memberById_(team, l.nbdId);
+  var to = l.nbdId ? memberById_(team, l.nbdId) : memberById_(team, b.toId);
+  if ((!to || !to.active || to.team !== 'NBD') && b.toId) to = memberById_(team, b.toId);
   if (!to || !to.active || to.team !== 'NBD') to = pickNbd_(team);
   if (!to) fail_('No NBD person is available right now');
   var from = l.ownerName;
   closeOpenStep_(l.enquiryNo);
   setOwner_(l, to); l.nextFollowUp = next; l.updatedAt = now_();
   writeLead_(l);
-  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Sent back', b.text, next, from, to.name);
-  openStep_(l.enquiryNo, 'Follow-up', to.name, next);
+  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, LOG_TYPES.indexOf(b.type) >= 0 && b.type !== 'Note' ? b.type + ', sent to sales coordinator' : 'Sent to sales coordinator', b.text, next, from, to.name);
+  openStep_(l.enquiryNo, l.stage, to.name, next);
   return { ok: true, ownerName: to.name };
 }
 
@@ -651,7 +677,8 @@ function actionReassign_(b, team) {
   setOwner_(l, to); l.updatedAt = now_();
   writeLead_(l);
   addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Reassigned', str_(b.text), '', from, to.name);
-  openStep_(l.enquiryNo, 'Follow-up', to.name, l.nextFollowUp || today_());
+  if (to.team === 'Sales') { l.salesId = to.id; l.salesName = to.name; if (SALES_STAGES.indexOf(l.stage) < 0) l.stage = '1st meeting'; writeLead_(l); }
+  openStep_(l.enquiryNo, l.stage, to.name, l.nextFollowUp || today_());
   return { ok: true, ownerName: to.name };
 }
 
@@ -663,7 +690,7 @@ function actionClose_(b) {
   l.outcome = 'Closed'; l.stage = 'Converted'; l.opf = str_(b.opf); l.orderValue = str_(b.orderValue);
   l.nextFollowUp = ''; l.updatedAt = now_();
   writeLead_(l);
-  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Closed', 'Sale reported. OPF ' + l.opf + ', value ' + l.orderValue + (str_(b.text) ? '. ' + str_(b.text) : ''), '', '', '');
+  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Closed', (LOG_TYPES.indexOf(b.type) >= 0 && b.type !== 'Note' ? b.type + '. ' : '') + 'Sale reported. OPF ' + l.opf + ', value ' + l.orderValue + (str_(b.text) ? '. ' + str_(b.text) : ''), '', '', '');
   return { ok: true };
 }
 
@@ -719,11 +746,11 @@ function importOpenLeads() {
       if (!name && !str_(r[2])) return;
       var pk = phoneKey_(r[2]);
       var owner = memberById_(team, str_(r[8]));
-      var stage = str_(r[10]) || 'Contacted';
+      var stage = normStage_(r[10]) || (owner && owner.team === 'Sales' ? '1st meeting' : 'Follow-up');
       var next = normDate_(r[11]);
       if (pk.length < 10) return set('Error: phone must be 10 digits');
       if (!owner || !owner.active || (owner.team !== 'NBD' && owner.team !== 'Sales')) return set('Error: Owner ID must be an active NBD or Sales person');
-      if (STAGES.indexOf(stage) < 0 || stage === 'Converted') return set('Error: stage must be New, Contacted, Valid, Meeting, Proposal or Negotiation');
+      if (STAGES.indexOf(stage) < 0 || stage === 'Converted') return set('Error: stage must be New, Not connected, Follow-up, 1st meeting, Send proposal or Negotiation');
       if (!next) return set('Error: Next Follow-up date is required');
       var enq = str_(r[0]) || nextEnquiryNo_();
       if (existing[enq]) return set('Error: ' + enq + ' is already in the CRM');
@@ -740,6 +767,7 @@ function importOpenLeads() {
         nextFollowUp: next, meetingDate: normDate_(r[12]), meetingTime: '', opf: '', orderValue: '', updatedAt: now_()
       };
       setOwner_(lead, owner);
+      if (owner.team === 'Sales') { lead.salesId = owner.id; lead.salesName = owner.name; }
       var nbd = memberById_(team, str_(r[9]));
       if (nbd && nbd.team === 'NBD' && !lead.nbdId) { lead.nbdId = nbd.id; lead.nbdName = nbd.name; }
       appendLead_(lead);

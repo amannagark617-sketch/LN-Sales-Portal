@@ -1,10 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, Phone, MessageCircle, Mail } from 'lucide-react';
 import { crmAction, fetchTimeline, CrmData } from './api';
-import { Lead, TimelineEntry, STAGES } from './constants';
+import { Lead, TimelineEntry, SALES_STAGES, MEETING_TYPES, normStage, nextSalesStage, plannedOf, isOverdue, stepLabel } from './constants';
 import { Field, inputCls, areaCls, btnPrimary, btnGhost, DateField, Tag, fullName, shortDate, todayStr } from './ui';
 
 type Status = 'Open' | 'Lost' | 'Invalid' | 'Closed';
+
+function Group({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div role="group" aria-label={label}>
+      <div className="text-xs font-bold text-slate-600 mb-1.5">{label}{required && <span className="text-rose-600"> *</span>}</div>
+      {children}
+    </div>
+  );
+}
+
+function Choice<T extends string>({ options, value, onChange, labels }: { options: T[]; value: T | ''; onChange: (v: T) => void; labels?: Partial<Record<T, string>> }) {
+  return (
+    <div className={`grid border border-slate-300 rounded-lg overflow-hidden`} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map(o => (
+        <button key={o} type="button" onClick={() => onChange(o)}
+          className={`min-h-[44px] px-1 text-[13px] font-bold border-r border-slate-300 last:border-r-0 leading-tight ${value === o ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{labels?.[o] || o}</button>
+      ))}
+    </div>
+  );
+}
 
 function Info({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
@@ -28,22 +48,26 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
   const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const blank = { status: 'Open' as Status, stage: '', text: '', next: '', align: false, back: false, toId: '', date: '', time: '', reason: '', opf: '', value: '' };
+  const blank = { conn: '' as '' | 'Connected' | 'Not connected', sub: '' as '' | 'Valid' | 'Invalid' | 'Call again', status: '' as Status | '', assign: 'Myself', mtype: '', text: '', next: '', toId: '', date: '', time: '', reason: '', opf: '', value: '' };
   const [f, setF] = useState(blank);
   const set = (k: keyof typeof blank, v: any) => setF(p => ({ ...p, [k]: v }));
 
   const loadTimeline = () => fetchTimeline(lead.enquiryNo).then(setTimeline).catch(() => setTimeline([]));
   useEffect(() => { setPanel(null); setError(''); setTimeline(null); setF(blank); loadTimeline(); }, [lead.enquiryNo]);
 
+  const stage = normStage(lead.stage);
   const isOwner = lead.ownerId === me.id;
   const isMine = isOwner || (me.team === 'NBD' && !lead.ownerId);
   const boss = me.admin || me.isManager || me.team === 'Manager';
   const open = lead.outcome === 'Open';
   const canUpdate = open && (isMine || boss);
-  const canAlign = open && lead.ownerTeam === 'NBD' && (isOwner || me.admin);
-  const canBack = open && lead.ownerTeam === 'Sales' && (isOwner || me.admin);
+  const ctx: 'call' | 'nbd' | 'sales' = lead.ownerTeam === 'Sales' ? 'sales' : (stage === 'New' || stage === 'Not connected') ? 'call' : 'nbd';
+  const canAlign = lead.ownerTeam === 'NBD' && (isOwner || me.admin);
+  const canBack = lead.ownerTeam === 'Sales' && (isOwner || me.admin) && (stage === 'Send proposal' || stage === 'Negotiation');
   const canReopen = !open && lead.outcome !== 'Closed' && (isMine || boss);
-  const overdue = open && lead.nextFollowUp && lead.nextFollowUp < todayStr();
+  const planned = plannedOf(lead);
+  const overdue = isOverdue(lead);
+  const salesDefault = lead.salesId && data.sales.some(s => s.id === lead.salesId) ? lead.salesId : '';
 
   const run = async (body: Record<string, any>) => {
     setBusy(true); setError('');
@@ -60,18 +84,71 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
     }
   };
 
+  const need = (ok: any, msg: string) => { if (!ok) { setError(msg); return false; } return true; };
+
   const save = () => {
-    if (f.status === 'Lost') return run({ action: 'mark-lost', reason: f.reason, text: f.text });
-    if (f.status === 'Invalid') return run({ action: 'mark-invalid', reason: f.reason, text: f.text });
-    if (f.status === 'Closed') return run({ action: 'close-lead', opf: f.opf, orderValue: f.value, text: f.text });
-    if (f.align) return run({ action: 'align', toId: f.toId, meetingDate: f.date, meetingTime: f.time, text: f.text });
-    if (f.back) return run({ action: 'send-back', toId: f.toId, text: f.text, nextFollowUp: f.next });
-    return run({ action: 'log-activity', type: 'Follow-up', text: f.text, stage: f.stage || (lead.stage === 'New' ? 'Contacted' : lead.stage), nextFollowUp: f.next });
+    setError('');
+    const invalid = () => need(f.reason, 'Pick a reason') && run({ action: 'mark-invalid', reason: f.reason, text: f.text, type: f.mtype });
+    if (ctx === 'call') {
+      if (!need(f.conn, 'Choose Connected or Not connected') || !need(f.sub, 'Choose an option')) return;
+      if (f.sub === 'Invalid') return invalid();
+      if (!need(f.next, 'Pick the next follow-up date')) return;
+      if (f.sub === 'Call again') return run({ action: 'log-activity', type: 'Call', stage: 'Not connected', text: f.text, nextFollowUp: f.next });
+      if (!need(f.text.trim(), 'Write the remarks')) return;
+      return run({ action: 'log-activity', type: 'Call', stage: 'Follow-up', text: f.text, nextFollowUp: f.next });
+    }
+    if (ctx === 'sales' && !need(f.mtype, 'Choose the type of meeting')) return;
+    if (!need(f.status, 'Choose the status')) return;
+    if (f.status === 'Invalid') return invalid();
+    if (f.status === 'Lost') return need(f.reason, 'Pick a reason') && run({ action: 'mark-lost', reason: f.reason, text: f.text, type: f.mtype });
+    if (f.status === 'Closed') return need(f.opf.trim() && f.value, 'Enter the OPF number and order value') && run({ action: 'close-lead', opf: f.opf, orderValue: f.value, text: f.text, type: f.mtype });
+    if (!need(f.text.trim(), 'Write the remarks')) return;
+    if (ctx === 'nbd') {
+      if (canAlign && f.assign === 'Salesperson') {
+        const toId = f.toId || salesDefault;
+        if (!need(toId, 'Pick a salesperson') || !need(f.date, 'Pick the meeting date')) return;
+        return run({ action: 'align', toId, meetingDate: f.date, meetingTime: f.time, text: f.text });
+      }
+      if (!need(f.next, 'Pick the next follow-up date')) return;
+      return run({ action: 'log-activity', type: 'Follow-up', stage, text: f.text, nextFollowUp: f.next });
+    }
+    if (!need(f.next, 'Pick the next follow-up date')) return;
+    if (canBack && f.assign === 'Sales coordinator') return run({ action: 'send-back', type: f.mtype, toId: f.toId, text: f.text, nextFollowUp: f.next });
+    return run({ action: 'log-activity', type: f.mtype, stage: nextSalesStage(stage), text: f.text, nextFollowUp: f.next });
   };
 
   const digits = lead.phone.replace(/\D/g, '').slice(-10);
   const people = [...data.nbd.map(n => ({ id: n.id, name: `${n.name} (NBD)` })), ...data.sales.map(s => ({ id: s.id, name: `${s.name} (${s.showroom || s.region})` }))];
-  const statuses: Status[] = ['Open', 'Lost', 'Invalid', 'Closed'];
+  const reasons = (st: string) => (st === 'Invalid' ? data.lists.InvalidReason : data.lists.LostReason);
+
+  const reasonFields = (st: string) => (
+    <>
+      <Field label="Reason" required>
+        <select className={inputCls} value={f.reason} onChange={e => set('reason', e.target.value)}>
+          <option value="">Select reason</option>
+          {reasons(st).map(r => <option key={r}>{r}</option>)}
+        </select>
+      </Field>
+      <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
+    </>
+  );
+  const remarks = (req = true) => <Field label="Remarks" required={req}><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What did the customer say?" /></Field>;
+  const nextField = <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>;
+  const closedFields = (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="OPF number" required><input className={inputCls} value={f.opf} onChange={e => set('opf', e.target.value)} /></Field>
+        <Field label="Order value" required><input className={inputCls} inputMode="numeric" value={f.value} onChange={e => set('value', e.target.value.replace(/[^\d.]/g, ''))} /></Field>
+      </div>
+      <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
+    </>
+  );
+
+  let moveTo = '';
+  if (ctx === 'call' && f.sub === 'Valid') moveTo = 'Follow-up';
+  if (ctx === 'call' && f.sub === 'Call again') moveTo = 'Not connected';
+  if (ctx === 'nbd' && f.status === 'Open') moveTo = canAlign && f.assign === 'Salesperson' ? `${SALES_STAGES.includes(stage) ? stage : '1st meeting'} with the salesperson` : stage;
+  if (ctx === 'sales' && f.status === 'Open') moveTo = canBack && f.assign === 'Sales coordinator' ? `${lead.nbdName || 'the sales coordinator'}` : nextSalesStage(stage);
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -80,7 +157,7 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-extrabold text-slate-900 truncate">{fullName(lead)}</h2>
-            <Tag text={open ? lead.stage : lead.outcome} />
+            <Tag text={open ? stage : lead.outcome} />
           </div>
           <div className="text-xs text-slate-500 mt-0.5">{lead.enquiryNo} · {lead.source}{lead.ownerName ? ` · with ${lead.ownerName}` : ' · waiting for an NBD person'}</div>
         </div>
@@ -94,94 +171,97 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
 
       {open && (
         <div className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${overdue ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div>
-            <div className="text-[11px] font-bold text-slate-500">Planned follow-up</div>
-            <div className={`text-base font-extrabold ${overdue ? 'text-rose-700' : 'text-slate-900'}`}>{lead.nextFollowUp ? shortDate(lead.nextFollowUp) : 'Not set'}{overdue ? ' · Overdue' : ''}</div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold text-slate-500">{stepLabel(stage)} · planned</div>
+            <div className={`text-base font-extrabold ${overdue ? 'text-rose-700' : 'text-slate-900'}`}>{planned ? shortDate(planned) : 'Not set'}{overdue ? ' · Overdue' : ''}</div>
           </div>
-          {canUpdate && <button onClick={() => { setPanel(panel === 'update' ? null : 'update'); setError(''); }} className={btnPrimary}>Update status</button>}
+          {canUpdate && <button onClick={() => { setPanel(panel === 'update' ? null : 'update'); setError(''); }} className={`${btnPrimary} shrink-0`}>Update</button>}
         </div>
       )}
 
       {(canUpdate && panel === 'update') && (
         <div className="p-4 border-b border-slate-100 space-y-3">
-          <div className="grid grid-cols-4 border border-slate-300 rounded-lg overflow-hidden">
-            {statuses.map(s => (
-              <button key={s} onClick={() => setF(p => ({ ...p, status: s, reason: '' }))}
-                className={`h-11 text-sm font-bold border-r border-slate-300 last:border-r-0 ${f.status === s ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{s}</button>
-            ))}
-          </div>
-
-          {f.status === 'Open' && (
+          {ctx === 'call' && (
             <>
-              {!f.align && !f.back && (
-                <Field label="Stage">
-                  <select className={inputCls} value={f.stage || (lead.stage === 'New' ? 'Contacted' : lead.stage)} onChange={e => set('stage', e.target.value)}>
-                    {STAGES.filter(s => s !== 'New' && s !== 'Converted').map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </Field>
+              <Group label="Call result" required>
+                <Choice options={['Connected', 'Not connected'] as const as any} value={f.conn} onChange={(v: any) => setF(p => ({ ...p, conn: v, sub: v === 'Connected' ? '' : 'Call again', reason: '' }))} />
+              </Group>
+              {f.conn === 'Connected' && (
+                <Group label="Lead is" required>
+                  <Choice options={['Valid', 'Invalid'] as any} value={f.sub} onChange={(v: any) => setF(p => ({ ...p, sub: v, reason: '' }))} />
+                </Group>
               )}
-              <Field label="Remarks" required><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What did the customer say?" /></Field>
-              {!f.align && <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>}
-              {canAlign && (
-                <label className="flex items-center gap-3 text-sm font-bold text-slate-800 min-h-[44px]">
-                  <input type="checkbox" className="h-5 w-5" checked={f.align} onChange={e => setF(p => ({ ...p, align: e.target.checked, toId: '' }))} />
-                  Align to a salesperson
-                </label>
+              {f.conn === 'Not connected' && (
+                <Choice options={['Call again', 'Invalid'] as any} value={f.sub} onChange={(v: any) => setF(p => ({ ...p, sub: v, reason: '' }))} labels={{ 'Invalid': 'Invalid number' } as any} />
               )}
-              {canAlign && f.align && (
-                <div className="space-y-3">
-                  <Field label="Salesperson" required>
-                    <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                      <option value="">Select salesperson</option>
-                      {data.sales.map(s => <option key={s.id} value={s.id}>{s.name} · {s.showroom || s.region}</option>)}
-                    </select>
-                  </Field>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Meeting date" required><input type="date" className={inputCls} min={todayStr()} value={f.date} onChange={e => set('date', e.target.value)} /></Field>
-                    <Field label="Meeting time"><input type="time" className={inputCls} value={f.time} onChange={e => set('time', e.target.value)} /></Field>
-                  </div>
-                </div>
-              )}
-              {canBack && (
-                <label className="flex items-center gap-3 text-sm font-bold text-slate-800 min-h-[44px]">
-                  <input type="checkbox" className="h-5 w-5" checked={f.back} onChange={e => setF(p => ({ ...p, back: e.target.checked, toId: '' }))} />
-                  Send back to NBD
-                </label>
-              )}
-              {canBack && f.back && (
-                <Field label="Send to" hint={lead.nbdName ? `Default: ${lead.nbdName}, who had it before` : undefined}>
-                  <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                    <option value="">{lead.nbdName ? `${lead.nbdName} (same NBD)` : 'Next NBD in rotation'}</option>
-                    {data.nbd.filter(n => n.id !== lead.nbdId).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
-                  </select>
-                </Field>
-              )}
+              {f.sub === 'Valid' && <>{remarks()}{nextField}</>}
+              {f.sub === 'Call again' && <>{nextField}{remarks(false)}</>}
+              {f.sub === 'Invalid' && reasonFields('Invalid')}
             </>
           )}
 
-          {(f.status === 'Lost' || f.status === 'Invalid') && (
-            <>
-              <Field label="Reason" required>
-                <select className={inputCls} value={f.reason} onChange={e => set('reason', e.target.value)}>
-                  <option value="">Select reason</option>
-                  {(f.status === 'Invalid' ? data.lists.InvalidReason : data.lists.LostReason).map(r => <option key={r}>{r}</option>)}
-                </select>
-              </Field>
-              <Field label="Remarks"><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
-            </>
-          )}
-
-          {f.status === 'Closed' && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="OPF number" required><input className={inputCls} value={f.opf} onChange={e => set('opf', e.target.value)} /></Field>
-                <Field label="Order value" required><input className={inputCls} inputMode="numeric" value={f.value} onChange={e => set('value', e.target.value.replace(/[^\d.]/g, ''))} /></Field>
+          {ctx === 'sales' && (
+            <Group label="Type of meeting" required>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {MEETING_TYPES.map(m => (
+                  <button key={m} type="button" onClick={() => set('mtype', m)}
+                    className={`min-h-[44px] rounded-lg border text-[13px] font-bold ${f.mtype === m ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>{m}</button>
+                ))}
               </div>
-              <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
+            </Group>
+          )}
+
+          {ctx !== 'call' && (
+            <>
+              <Group label="Status" required>
+                <Choice options={['Open', 'Lost', 'Invalid', 'Closed'] as Status[]} value={f.status} onChange={v => setF(p => ({ ...p, status: v, reason: '' }))} />
+              </Group>
+              {f.status === 'Open' && (
+                <>
+                  {remarks()}
+                  {ctx === 'nbd' && canAlign && (
+                    <Group label="Assigned to">
+                      <Choice options={['Myself', 'Salesperson'] as any} value={f.assign as any} onChange={(v: any) => setF(p => ({ ...p, assign: v, toId: '' }))} />
+                    </Group>
+                  )}
+                  {ctx === 'nbd' && canAlign && f.assign === 'Salesperson' ? (
+                    <>
+                      <Field label="Salesperson" required hint={salesDefault ? `Last with ${lead.salesName}. Change it if needed.` : undefined}>
+                        <select className={inputCls} value={f.toId || salesDefault} onChange={e => set('toId', e.target.value)}>
+                          <option value="">Select salesperson</option>
+                          {data.sales.map(s => <option key={s.id} value={s.id}>{s.name} · {s.showroom || s.region}</option>)}
+                        </select>
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Meeting date" required><input type="date" className={inputCls} min={todayStr()} value={f.date} onChange={e => set('date', e.target.value)} /></Field>
+                        <Field label="Meeting time"><input type="time" className={inputCls} value={f.time} onChange={e => set('time', e.target.value)} /></Field>
+                      </div>
+                    </>
+                  ) : nextField}
+                  {ctx === 'sales' && canBack && (
+                    <Group label="Assigned to">
+                      <Choice options={['Myself', 'Sales coordinator'] as any} value={f.assign as any} onChange={(v: any) => setF(p => ({ ...p, assign: v, toId: '' }))}
+                        labels={{ 'Sales coordinator': lead.nbdName ? `${lead.nbdName} (NBD)` : 'Sales coordinator' } as any} />
+                    </Group>
+                  )}
+                  {ctx === 'sales' && canBack && f.assign === 'Sales coordinator' && !lead.nbdName && (
+                    <Field label="Sales coordinator" required>
+                      <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
+                        <option value="">Next NBD in rotation</option>
+                        {data.nbd.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                      </select>
+                    </Field>
+                  )}
+                </>
+              )}
+              {(f.status === 'Lost' || f.status === 'Invalid') && reasonFields(f.status)}
+              {f.status === 'Closed' && closedFields}
             </>
           )}
 
+          {error && <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
           <div className="sticky bottom-16 md:bottom-0 bg-white pt-2 pb-1 -mb-1 z-10">
+            {moveTo && <div className="text-xs text-slate-500 mb-2">Moves to: <span className="font-bold text-slate-800">{moveTo}</span></div>}
             <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
           </div>
         </div>
@@ -194,7 +274,7 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
             : (
               <>
                 <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} placeholder="Why is it back?" /></Field>
-                <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>
+                {nextField}
                 <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reopen', nextFollowUp: f.next, text: f.text })}>{busy ? 'Saving…' : 'Reopen lead'}</button>
               </>
             )}
@@ -219,7 +299,7 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
         </div>
       )}
 
-      {error && <div className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+      {error && panel !== 'update' && <div className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
 
       <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-slate-100">
         <Info label="Phone" value={lead.phone} />
