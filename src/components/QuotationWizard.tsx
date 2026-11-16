@@ -12,7 +12,7 @@ import {
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { ItemPicker, ItemGroup } from './ItemPicker';
-import { fetchCrm } from '../crm/api';
+import { fetchCrm, fetchCrmQuote } from '../crm/api';
 import type { Lead } from '../crm/constants';
 import { Combo } from '../crm/ui';
 
@@ -141,7 +141,7 @@ const DiscountInput = ({ value, onChange }: { value: { mode: 'pct' | 'amt'; valu
   </div>
 );
 
-interface Props { salesperson: Salesperson; lead?: any; onLeadChange?: (l: any) => void }
+interface Props { salesperson: Salesperson; lead?: any; reuse?: { no: string; asPI: boolean } | null; onLeadChange?: (l: any) => void }
 
 /** The stored logo can be 1600px wide, which made every PDF about 6 MB. 600px is plenty for a 50 mm logo. */
 const shrinkImage = (src: string, maxW = 600): Promise<string> => new Promise(resolve => {
@@ -159,7 +159,7 @@ const shrinkImage = (src: string, maxW = 600): Promise<string> => new Promise(re
   img.src = src;
 });
 
-export function QuotationWizard({ salesperson, lead, onLeadChange }: Props) {
+export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Props) {
   const [tab, setTab] = useState<'build' | 'history'>('build');
   const [price, setPrice] = useState<PriceListPayload | null>(null);
   const [loadErr, setLoadErr] = useState('');
@@ -199,7 +199,7 @@ export function QuotationWizard({ salesperson, lead, onLeadChange }: Props) {
   const [myLeads, setMyLeads] = useState<Lead[]>([]);
   const [leadNo, setLeadNo] = useState('');
   useEffect(() => {
-    fetchCrm().then(d => setMyLeads(d.leads.filter(l => l.outcome === 'Open'))).catch(() => setMyLeads([]));
+    fetchCrm().then(d => setMyLeads(d.leads.filter(l => l.outcome === 'Open' && l.ownerId === d.me.id))).catch(() => setMyLeads([]));
   }, []);
   const useLead = (l: Lead | undefined | null) => {
     if (!l) { setLeadNo(''); onLeadChange?.(null); return; }
@@ -210,7 +210,13 @@ export function QuotationWizard({ salesperson, lead, onLeadChange }: Props) {
     onLeadChange?.(l);
   };
   useEffect(() => {
-    if (lead && lead.enquiryNo !== leadNo) { useLead(lead); setSaved(null); setTab('build'); setStep(1); }
+    if (lead && lead.enquiryNo !== leadNo) {
+      useLead(lead); setSaved(null); setTab('build');
+      if (reuse) {
+        setError('');
+        fetchCrmQuote(reuse.no).then(r => { openRecord(r, reuse.asPI); setLeadNo(lead.enquiryNo); }).catch((e: any) => { setStep(1); setError(e.message || 'Could not open that quotation.'); });
+      } else setStep(1);
+    }
   }, [lead]);
 
   const [saving, setSaving] = useState(false);

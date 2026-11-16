@@ -42,6 +42,7 @@ function MainContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [quoteLead, setQuoteLead] = useState<any>(null);
+  const [quoteReuse, setQuoteReuse] = useState<{ no: string; asPI: boolean } | null>(null);
   const [view, setView] = useState<'dashboard' | 'sale' | 'noSale' | 'submissions' | 'quotation' | 'stock' | 'links' | 'crm'>('sale');
 
   useEffect(() => {
@@ -355,7 +356,7 @@ function MainContent() {
 
                   {/* 5. Proforma Invoice Generator */}
                   <button 
-                    onClick={() => { setQuoteLead(null); setView('quotation'); }} 
+                    onClick={() => { setQuoteLead(null); setQuoteReuse(null); setView('quotation'); }} 
                     className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
                       view === 'quotation' 
                         ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-250/10' 
@@ -433,9 +434,9 @@ function MainContent() {
         {view === 'submissions' && <MySubmissions data={mySubmissionsData} />}
         {view === 'stock' && user && <ReadyStock salespersonName={user.name} />}
         {view === 'links' && user && <QuickLinks />}
-        {view === 'crm' && user && <CrmApp onQuote={l => { setQuoteLead(l); setView('quotation'); }} />}
+        {view === 'crm' && user && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }} />}
         {view === 'quotation' && user && (
-          <QuotationWizard salesperson={user} lead={quoteLead} onLeadChange={setQuoteLead} />
+          <QuotationWizard salesperson={user} lead={quoteLead} reuse={quoteReuse} onLeadChange={l => { setQuoteLead(l); if (!l) setQuoteReuse(null); }} />
         )}
         
         {(view === 'sale' || view === 'noSale') && (

@@ -8,7 +8,7 @@ import { AddEnquiry } from './AddEnquiry';
 
 type Tab = 'today' | 'leads' | 'add';
 
-export function CrmApp({ onQuote }: { onQuote?: (lead: Lead) => void }) {
+export function CrmApp({ onQuote }: { onQuote?: (lead: Lead, reuse?: { no: string; asPI: boolean }) => void }) {
   const [data, setData] = useState<CrmData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

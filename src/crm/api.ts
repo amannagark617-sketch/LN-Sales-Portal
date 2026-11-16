@@ -7,7 +7,7 @@ export interface CrmLists {
   Segment: string[]; Title: string[]; Designation: string[]; Requirement: string[]; Zone: string[]; State: string[];
   LostReason: string[]; InvalidReason: string[];
 }
-export interface CrmQuote { enquiryNo: string; quoteNo: string; docType: 'Quotation' | 'PI'; brand: string; amount: string; linkedQuote: string; byName: string; date: string; }
+export interface CrmQuote { enquiryNo: string; quoteNo: string; docType: 'Quotation' | 'PI'; brand: string; amount: string; linkedQuote: string; byName: string; date: string; pdfUrl?: string; convertedTo?: string; }
 export interface CrmData {
   leads: Lead[];
   quotes?: CrmQuote[];
@@ -35,4 +35,8 @@ export async function fetchTimeline(enq: string): Promise<TimelineEntry[]> {
 
 export async function crmAction(body: Record<string, any>): Promise<any> {
   return parse(await fetch('/api/crm/action', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body) }));
+}
+
+export async function fetchCrmQuote(no: string): Promise<any> {
+  return parse(await fetch(`/api/crm/quote?no=${encodeURIComponent(no)}`, { headers: getAuthHeaders() }));
 }

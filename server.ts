@@ -1265,6 +1265,32 @@ async function startServer() {
         return res.status(409).json({ error: `${quotationNumber} was just used by someone else. The next number is loading, please try again.` });
       }
 
+      // 2b. Optional link to a CRM lead. Only the person who has the lead may make documents for it
+      //     (a PI inherits the lead of its quotation)
+      let enquiryNo = String(body.enquiryNo || '').trim();
+      let leadCheck: 'none' | 'ok' | 'skipped' = 'none';
+      let ownsLead = false;
+      const sourceNo = String(body.linkedQuotation || '').trim();
+      try {
+        if ((enquiryNo || docType === 'PI') && process.env.CRM_SCRIPT_URL && process.env.CRM_SCRIPT_KEY && canUseCrm(currentUser)) {
+          const crm = await getCrmData(true);
+          if (!enquiryNo && docType === 'PI') enquiryNo = ((crm.quotes || []).find((q: any) => String(q.quoteNo).toLowerCase() === sourceNo.toLowerCase()) || {}).enquiryNo || '';
+          if (enquiryNo) {
+            const theLead = (crm.leads || []).find((l: any) => l.enquiryNo === enquiryNo);
+            if (!theLead) return res.status(404).json({ error: 'That lead was not found.' });
+            if (theLead.outcome !== 'Open') return res.status(400).json({ error: 'That lead is no longer open.' });
+            if ((theLead.ownerId || '') !== currentUser.id) {
+              return res.status(403).json({ error: `Only ${theLead.ownerName || 'the person who has this lead'} can make quotations for it.` });
+            }
+            leadCheck = 'ok';
+            ownsLead = true;
+          }
+        } else if (enquiryNo) leadCheck = 'skipped';
+      } catch (e: any) {
+        console.error('Quotation lead check failed:', e.message);
+        if (enquiryNo) leadCheck = 'skipped';
+      }
+
       // 3. A PI must be made from an existing, unconverted quotation of the same brand
       let linkedQuotation = '';
       if (docType === 'PI') {
@@ -1279,29 +1305,9 @@ async function startServer() {
         const allowed = managed.some(s =>
           s.id.trim().toLowerCase() === (source.salespersonId || '').trim().toLowerCase() ||
           s.name.trim().toLowerCase() === (source.salespersonName || '').trim().toLowerCase());
-        if (!allowed) return res.status(403).json({ error: 'You cannot convert this quotation.' });
+        if (!allowed && !ownsLead) return res.status(403).json({ error: 'You cannot convert this quotation.' });
         const existingPi = history.find(h => h.docType === 'PI' && (h.linkedQuotation || '').trim().toLowerCase() === linkedQuotation.toLowerCase());
         if (existingPi) return res.status(409).json({ error: `This quotation was already converted to ${existingPi.quotationNumber}.` });
-      }
-
-      // 3b. Optional link to a CRM lead (a PI inherits the lead of its quotation)
-      let enquiryNo = String(body.enquiryNo || '').trim();
-      let leadCheck: 'none' | 'ok' | 'skipped' = 'none';
-      try {
-        if ((enquiryNo || docType === 'PI') && process.env.CRM_SCRIPT_URL && process.env.CRM_SCRIPT_KEY && canUseCrm(currentUser)) {
-          const crm = await getCrmData(true);
-          if (!enquiryNo && docType === 'PI') enquiryNo = ((crm.quotes || []).find((q: any) => String(q.quoteNo).toLowerCase() === linkedQuotation.toLowerCase()) || {}).enquiryNo || '';
-          if (enquiryNo) {
-            const all = await getCachedSalespersons();
-            if (!crmScope(currentUser, crm.leads, all).some((l: any) => l.enquiryNo === enquiryNo)) {
-              return res.status(403).json({ error: 'That lead is not yours, so the quotation cannot be linked to it.' });
-            }
-            leadCheck = 'ok';
-          }
-        } else if (enquiryNo) leadCheck = 'skipped';
-      } catch (e: any) {
-        console.error('Quotation lead check failed:', e.message);
-        if (enquiryNo) leadCheck = 'skipped';
       }
 
       // 4. Totals are always recalculated here; the browser's totals are ignored
@@ -1610,9 +1616,17 @@ async function startServer() {
       const active = all.filter((s: any) => s.active !== false);
       const scoped = crmScope(u, data.leads, all);
       const seen = new Set(scoped.map((l: any) => l.enquiryNo));
+      let hist: any[] = [];
+      try { hist = await getCachedQuotationHistory(); } catch { /* links are optional */ }
+      const byNo = new Map(hist.map((h: any) => [String(h.quotationNumber || '').trim().toLowerCase(), h]));
+      const converted = new Map<string, string>();
+      (data.quotes || []).forEach((q: any) => { if (q.docType === 'PI' && q.linkedQuote) converted.set(String(q.linkedQuote).toLowerCase(), q.quoteNo); });
       res.json({
         leads: scoped,
-        quotes: (data.quotes || []).filter((q: any) => seen.has(q.enquiryNo)),
+        quotes: (data.quotes || []).filter((q: any) => seen.has(q.enquiryNo)).map((q: any) => {
+          const h: any = byNo.get(String(q.quoteNo).toLowerCase()) || {};
+          return { ...q, pdfUrl: h.pdfUrl || '', convertedTo: q.docType === 'Quotation' ? (converted.get(String(q.quoteNo).toLowerCase()) || '') : '' };
+        }),
         me: { id: u.id, name: u.name, team: crmTeam(u), isManager: !!u.isManager, admin: isCrmAdmin(u) },
         sales: active.filter((s: any) => s.team === 'Sales').map((s: any) => ({ id: s.id, name: s.name, showroom: s.showroom, region: s.region })),
         nbd: active.filter((s: any) => s.team === 'NBD').map((s: any) => ({ id: s.id, name: s.name, present: data.availability?.[s.id] !== false })),
@@ -1622,6 +1636,24 @@ async function startServer() {
     } catch (err: any) {
       console.error('API /api/crm/leads error:', err);
       res.status(err.status || 500).json({ error: err.message || 'Could not load leads.' });
+    }
+  });
+
+  app.get('/api/crm/quote', async (req, res) => {
+    try {
+      const u = await authenticate(req);
+      if (!u) return res.status(401).json({ error: 'Unauthorized' });
+      if (!canUseCrm(u)) return res.status(403).json({ error: 'The CRM is not available for your role.' });
+      const no = String(req.query.no || '').trim().toLowerCase();
+      const [data, all] = await Promise.all([getCrmData(true), getCachedSalespersons()]);
+      const link = (data.quotes || []).find((q: any) => String(q.quoteNo).toLowerCase() === no);
+      if (!link || !crmScope(u, data.leads, all).some((l: any) => l.enquiryNo === link.enquiryNo)) return res.status(404).json({ error: 'Quotation not found.' });
+      const rec = (await getCachedQuotationHistory()).find((h: any) => String(h.quotationNumber || '').trim().toLowerCase() === no);
+      if (!rec) return res.status(404).json({ error: 'Quotation details not found.' });
+      res.json(rec);
+    } catch (err: any) {
+      console.error('API /api/crm/quote error:', err);
+      res.status(err.status || 500).json({ error: err.message || 'Could not load the quotation.' });
     }
   });
 

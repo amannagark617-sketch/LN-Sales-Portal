@@ -42,8 +42,9 @@ function when(t: string): string {
   return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void; onQuote?: (lead: Lead) => void }) {
+export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void; onQuote?: (lead: Lead, reuse?: { no: string; asPI: boolean }) => void }) {
   const me = data.me;
+  const iOwn = lead.ownerId === me.id;
   const quotes = (data.quotes || []).filter(q => q.enquiryNo === lead.enquiryNo).sort((a, b) => b.date.localeCompare(a.date));
   const [panel, setPanel] = useState<null | 'update' | 'reopen' | 'reassign'>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
@@ -168,22 +169,35 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
         {lead.email ? <a href={`mailto:${lead.email}`} className={btnGhost}><Mail size={16} /> Email</a> : <span />}
       </div>
 
-      {(onQuote || quotes.length > 0) && (
+      {((onQuote && iOwn && open) || quotes.length > 0) && (
         <div className="px-4 py-3 border-b border-slate-100">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-bold text-slate-800">Quotations{quotes.length > 0 && <span className="ml-1.5 text-xs font-normal text-slate-500">{quotes.length}</span>}</div>
-            {onQuote && open && <button onClick={() => onQuote(lead)} className="h-10 px-4 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 inline-flex items-center gap-2"><FileText size={16} /> Create quotation</button>}
+            {onQuote && iOwn && open && <button onClick={() => onQuote(lead)} className="h-10 px-4 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 inline-flex items-center gap-2"><FileText size={16} /> Create quotation</button>}
           </div>
           {quotes.length > 0 ? (
             <ul className="mt-2 divide-y divide-slate-100">
               {quotes.map(q => (
-                <li key={q.quoteNo} className="py-2 flex items-center justify-between gap-3 text-sm">
-                  <div className="min-w-0">
-                    <span className="font-bold text-slate-900">{q.quoteNo}</span>
-                    <span className="ml-2 text-xs text-slate-500">{q.docType === 'PI' ? 'Proforma invoice' : 'Quotation'} · {q.brand}</span>
-                    <div className="text-xs text-slate-500">{shortDate(q.date)}{q.byName ? ` · ${q.byName}` : ''}</div>
+                <li key={q.quoteNo} className="py-2.5">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-900">{q.quoteNo}</span>
+                      <span className="ml-2 text-xs text-slate-500">{q.docType === 'PI' ? 'Proforma invoice' : 'Quotation'} · {q.brand}</span>
+                      <div className="text-xs text-slate-500">{shortDate(q.date)}{q.byName ? ` · ${q.byName}` : ''}{q.convertedTo ? ` · converted to ${q.convertedTo}` : ''}</div>
+                    </div>
+                    <div className="font-bold text-slate-900 shrink-0">Rs. {Number(q.amount || 0).toLocaleString('en-IN')}</div>
                   </div>
-                  <div className="font-bold text-slate-900 shrink-0">Rs. {Number(q.amount || 0).toLocaleString('en-IN')}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {q.pdfUrl
+                      ? <a href={q.pdfUrl} target="_blank" rel="noreferrer" className="h-9 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50 inline-flex items-center gap-1.5"><FileText size={14} /> View PDF</a>
+                      : <span className="h-9 px-3 rounded-lg bg-slate-50 text-slate-500 text-xs inline-flex items-center">PDF is being prepared. Refresh in a moment.</span>}
+                    {onQuote && iOwn && open && q.docType === 'Quotation' && (
+                      <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: false })} className="h-9 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50">Revise</button>
+                    )}
+                    {onQuote && iOwn && open && q.docType === 'Quotation' && !q.convertedTo && (
+                      <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: true })} className="h-9 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800">Convert to PI</button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
