@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import { crmAction, CrmData } from './api';
-import { Field, inputCls, areaCls, btnPrimary, btnGhost, todayStr, Tag, fullName } from './ui';
+import { Field, Combo, opts, inputCls, areaCls, btnPrimary, btnGhost, todayStr, Tag, fullName } from './ui';
 import { ZONE_OF_STATE, Lead } from './constants';
 
 const EMPTY = {
@@ -71,15 +71,11 @@ export function AddEnquiry({ data, onSaved, onOpen }: { data: CrmData; onSaved: 
         <h2 className="text-lg font-bold text-slate-900">Add enquiry</h2>
 
         <Field label="Lead source" required>
-          <select className={inputCls} value={f.source} onChange={e => set('source', e.target.value)}>
-            <option value="">Select source</option>
-            <optgroup label="Met the customer directly">
-              {directSources.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-            </optgroup>
-            <optgroup label="Online and marketing (goes to NBD)">
-              {nbdSources.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-            </optgroup>
-          </select>
+          <Combo value={f.source} onChange={v => set('source', v)} placeholder="Search source"
+            options={[
+              ...directSources.map(s => ({ value: s.name, label: s.name, group: 'Met the customer directly' })),
+              ...nbdSources.map(s => ({ value: s.name, label: s.name, group: 'Online and marketing (goes to NBD)' })),
+            ]} />
         </Field>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -88,10 +84,7 @@ export function AddEnquiry({ data, onSaved, onOpen }: { data: CrmData; onSaved: 
           </Field>
           <Field label="Name" required>
             <div className="grid grid-cols-[84px_1fr] gap-2">
-              <select className={inputCls} value={f.title} onChange={e => set('title', e.target.value)}>
-                <option value="">Title</option>
-                {lists.Title.map(t => <option key={t}>{t}</option>)}
-              </select>
+              <Combo value={f.title} onChange={v => set('title', v)} placeholder="Title" options={opts(lists.Title)} ariaLabel="Title" />
               <input className={inputCls} placeholder="First name" value={f.firstName} onChange={e => set('firstName', e.target.value)} />
             </div>
           </Field>
@@ -112,30 +105,18 @@ export function AddEnquiry({ data, onSaved, onOpen }: { data: CrmData; onSaved: 
           <Field label="Email"><input className={inputCls} type="email" inputMode="email" value={f.email} onChange={e => set('email', e.target.value)} /></Field>
           <Field label="City" required><input className={inputCls} value={f.city} onChange={e => set('city', e.target.value)} /></Field>
           <Field label="State" required>
-            <select className={inputCls} value={f.state} onChange={e => set('state', e.target.value)}>
-              <option value="">Select state</option>
-              {lists.State.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <Combo value={f.state} onChange={v => set('state', v)} placeholder="Search state" options={opts(lists.State)} />
           </Field>
           <Field label="Requirement" required>
-            <select className={inputCls} value={f.requirement} onChange={e => set('requirement', e.target.value)}>
-              <option value="">Select requirement</option>
-              {lists.Requirement.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <Combo value={f.requirement} onChange={v => set('requirement', v)} placeholder="Search requirement" options={opts(lists.Requirement)} />
           </Field>
           <Field label="Quantity"><input className={inputCls} inputMode="numeric" value={f.quantity} onChange={e => set('quantity', e.target.value)} /></Field>
           <Field label="Segment">
-            <select className={inputCls} value={f.segment} onChange={e => set('segment', e.target.value)}>
-              <option value="">Select segment</option>
-              {lists.Segment.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <Combo value={f.segment} onChange={v => set('segment', v)} placeholder="Search segment" options={opts(lists.Segment)} />
           </Field>
           <Field label="Company"><input className={inputCls} value={f.company} onChange={e => set('company', e.target.value)} /></Field>
           <Field label="Designation">
-            <select className={inputCls} value={f.designation} onChange={e => set('designation', e.target.value)}>
-              <option value="">Select</option>
-              {lists.Designation.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <Combo value={f.designation} onChange={v => set('designation', v)} placeholder="Search designation" options={opts(lists.Designation)} />
           </Field>
           <Field label="Date"><input className={inputCls} value={todayStr()} disabled /></Field>
         </div>

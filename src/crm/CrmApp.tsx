@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, CalendarCheck, List, PlusCircle } from 'lucide-react';
 import { fetchCrm, crmAction, CrmData } from './api';
 import { Lead, normStage, plannedOf, isOverdue, isDueToday, stepLabel, STAGES } from './constants';
-import { LeadRow, Section, inputCls, btnGhost, todayStr, fullName } from './ui';
+import { LeadRow, Section, Combo, opts, inputCls, btnGhost, todayStr, fullName } from './ui';
 import { LeadPanel } from './LeadPanel';
 import { AddEnquiry } from './AddEnquiry';
 
@@ -140,12 +140,8 @@ export function CrmApp() {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
         <input className={`${inputCls} col-span-2`} placeholder="Search name, phone, enquiry no" value={q} onChange={e => setQ(e.target.value)} />
-        <select className={inputCls} value={fOwner} onChange={e => setFOwner(e.target.value)} aria-label="Owner">
-          <option value="">All owners</option>{owners.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
-        </select>
-        <select className={inputCls} value={fSource} onChange={e => setFSource(e.target.value)} aria-label="Source">
-          <option value="">All sources</option>{sources.map(s => <option key={s}>{s}</option>)}
-        </select>
+        <Combo value={fOwner} onChange={setFOwner} placeholder="All owners" clearLabel="All owners" ariaLabel="Owner" options={owners.map(([id, n]) => ({ value: id, label: n }))} />
+        <Combo value={fSource} onChange={setFSource} placeholder="All sources" clearLabel="All sources" ariaLabel="Source" options={opts(sources)} />
       </div>
       <div className="text-xs text-slate-500 mb-2 px-1">{filtered.length} leads · newest first</div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">

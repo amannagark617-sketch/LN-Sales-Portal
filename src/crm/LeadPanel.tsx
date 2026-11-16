@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronLeft, Phone, MessageCircle, Mail } from 'lucide-react';
 import { crmAction, fetchTimeline, CrmData } from './api';
 import { Lead, TimelineEntry, SALES_STAGES, MEETING_TYPES, normStage, nextSalesStage, plannedOf, isOverdue, stepLabel } from './constants';
-import { Field, inputCls, areaCls, btnPrimary, btnGhost, DateField, Tag, fullName, shortDate, todayStr } from './ui';
+import { Field, Combo, opts, inputCls, areaCls, btnPrimary, btnGhost, DateField, Tag, KindTag, fullName, shortDate, todayStr } from './ui';
 
 type Status = 'Open' | 'Lost' | 'Invalid' | 'Closed';
 
@@ -124,10 +124,7 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
   const reasonFields = (st: string) => (
     <>
       <Field label="Reason" required>
-        <select className={inputCls} value={f.reason} onChange={e => set('reason', e.target.value)}>
-          <option value="">Select reason</option>
-          {reasons(st).map(r => <option key={r}>{r}</option>)}
-        </select>
+        <Combo value={f.reason} onChange={v => set('reason', v)} placeholder="Search reason" options={opts(reasons(st))} />
       </Field>
       <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
     </>
@@ -158,6 +155,7 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-extrabold text-slate-900 truncate">{fullName(lead)}</h2>
             <Tag text={open ? stage : lead.outcome} />
+            <KindTag lead={lead} />
           </div>
           <div className="text-xs text-slate-500 mt-0.5">{lead.enquiryNo} · {lead.source}{lead.ownerName ? ` · with ${lead.ownerName}` : ' · waiting for an NBD person'}</div>
         </div>
@@ -227,10 +225,8 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
                   {ctx === 'nbd' && canAlign && f.assign === 'Salesperson' ? (
                     <>
                       <Field label="Salesperson" required hint={salesDefault ? `Last with ${lead.salesName}. Change it if needed.` : undefined}>
-                        <select className={inputCls} value={f.toId || salesDefault} onChange={e => set('toId', e.target.value)}>
-                          <option value="">Select salesperson</option>
-                          {data.sales.map(s => <option key={s.id} value={s.id}>{s.name} · {s.showroom || s.region}</option>)}
-                        </select>
+                        <Combo value={f.toId || salesDefault} onChange={v => set('toId', v)} placeholder="Search salesperson"
+                          options={data.sales.map(s => ({ value: s.id, label: `${s.name} · ${s.showroom || s.region}` }))} />
                       </Field>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Meeting date" required><input type="date" className={inputCls} min={todayStr()} value={f.date} onChange={e => set('date', e.target.value)} /></Field>
@@ -246,10 +242,8 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
                   )}
                   {ctx === 'sales' && canBack && f.assign === 'Sales coordinator' && !lead.nbdName && (
                     <Field label="Sales coordinator" required>
-                      <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                        <option value="">Next NBD in rotation</option>
-                        {data.nbd.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
-                      </select>
+                      <Combo value={f.toId} onChange={v => set('toId', v)} placeholder="Next NBD in rotation" clearLabel="Next NBD in rotation"
+                        options={data.nbd.map(n => ({ value: n.id, label: n.name }))} />
                     </Field>
                   )}
                 </>
@@ -287,10 +281,7 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
           {panel === 'reassign' && (
             <div className="space-y-3">
               <Field label="New owner" required>
-                <select className={inputCls} value={f.toId} onChange={e => set('toId', e.target.value)}>
-                  <option value="">Select person</option>
-                  {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <Combo value={f.toId} onChange={v => set('toId', v)} placeholder="Search person" options={people.map(p => ({ value: p.id, label: p.name }))} />
               </Field>
               <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} /></Field>
               <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reassign', toId: f.toId, text: f.text })}>{busy ? 'Saving…' : 'Reassign'}</button>
@@ -300,6 +291,30 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
       )}
 
       {error && panel !== 'update' && <div className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+
+      {lead.nbdId && lead.nbdId !== me.id && (lead.ownerTeam === 'Sales' || lead.salesId) && (() => {
+        const mine = (timeline || []).filter(t => t.byId === lead.nbdId && t.text && t.type !== 'Created');
+        if (!mine.length) return null;
+        return (
+          <div className="p-4 border-b border-slate-100 bg-blue-50/50">
+            <h3 className="text-sm font-bold text-slate-800 mb-0.5">What {lead.nbdName || 'the sales coordinator'} did on this lead</h3>
+            <div className="text-xs text-slate-500 mb-3">Read this before you talk to the customer.</div>
+            <ul className="space-y-3">
+              {[...mine].reverse().slice(0, 5).map((t, i) => (
+                <li key={i} className="text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-bold text-slate-900">{t.type}</span>
+                    <span className="text-[11px] text-slate-400 shrink-0">{when(t.time)}</span>
+                  </div>
+                  <div className="text-slate-700 whitespace-pre-wrap">{t.text}</div>
+                  {t.nextFollowUp && <div className="text-xs text-slate-500">Next follow-up {shortDate(t.nextFollowUp)}</div>}
+                </li>
+              ))}
+            </ul>
+            {mine.length > 5 && <div className="text-xs text-slate-500 mt-2">The full history is in the timeline below.</div>}
+          </div>
+        );
+      })()}
 
       <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-slate-100">
         <Info label="Phone" value={lead.phone} />
