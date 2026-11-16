@@ -4,7 +4,7 @@ var LEAD_SHEET_GID = 1382477988;
 var APP_PREFIX = 'LNS';
 var SELF_TAB = 'Self Leads';
 var SELF_COLS = ['Enquiry No', 'Date', 'Added By', 'Added By ID', 'Source', 'Segment', 'Title', 'First Name', 'Last Name', 'Company', 'Designation', 'Phone', 'Email', 'City', 'State', 'Zone', 'Requirement', 'Quantity', 'Notes'];
-var FIRST_CALL_HOURS = 2;
+var FIRST_CALL_CUTOFF = '18:30';
 var MAX_PER_RUN = 60;
 
 var LEAD_COLS = ['enquiryNo', 'createdAt', 'channel', 'sourceRef', 'source', 'group', 'segment', 'title', 'firstName', 'lastName',
@@ -52,8 +52,15 @@ function schema_() {
   props.setProperty('SCHEMA', SCHEMA);
 }
 
-function plannedCall_() {
-  return Utilities.formatDate(new Date(Date.now() + FIRST_CALL_HOURS * 3600000), tz_(), 'yyyy-MM-dd HH:mm');
+function plannedCall_(from) {
+  var t = String(from || now_());
+  var day = t.slice(0, 10);
+  if (t.slice(11, 16) > FIRST_CALL_CUTOFF) {
+    var d = new Date(day + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    day = d.toISOString().slice(0, 10);
+  }
+  return day + ' ' + FIRST_CALL_CUTOFF;
 }
 
 var ZONE_OF_STATE = {
@@ -318,7 +325,7 @@ function newLead_(f, team, how) {
     owner = pickNbd_(team);
   }
   setOwner_(lead, owner);
-  lead.nextFollowUp = lead.stage === 'New' ? (owner ? plannedCall_() : '') : (str_(f.nextFollowUp) || today_());
+  lead.nextFollowUp = lead.stage === 'New' ? (owner ? plannedCall_(lead.createdAt) : '') : (str_(f.nextFollowUp) || today_());
   appendLead_(lead);
   addTimeline_(lead.enquiryNo, adder, 'Created', 'Added from ' + (lead.source || lead.channel) + (how ? '. ' + how : ''), '', '', lead.ownerName);
   if (owner) {

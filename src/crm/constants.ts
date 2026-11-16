@@ -69,17 +69,28 @@ export const nextSalesStage = (s: string): string => {
   return st === '1st meeting' ? 'Send proposal' : 'Negotiation';
 };
 
-const FIRST_CALL_HOURS = 2;
+const FIRST_CALL_CUTOFF = '18:30';
 const istNow = (): string => new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16);
 
-/** Planned follow-up for a lead. A new lead with no date is due 2 hours after it came in. */
+/** A new lead is due by 6:30 pm on the day it came in. Anything after 6:30 pm is due by 6:30 pm the next day. */
+function firstCallDue(createdAt: string): string {
+  const t = createdAt.slice(0, 16).replace('T', ' ');
+  let day = t.slice(0, 10);
+  if (t.slice(11, 16) > FIRST_CALL_CUTOFF) {
+    const d = new Date(day + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    day = d.toISOString().slice(0, 10);
+  }
+  return `${day} ${FIRST_CALL_CUTOFF}`;
+}
+
 export function plannedOf(l: { nextFollowUp: string; stage: string; createdAt: string; ownerId: string; outcome: string }): string {
   if (l.outcome !== 'Open') return '';
-  if (l.nextFollowUp) return l.nextFollowUp.slice(0, 16);
-  if (normStage(l.stage) !== 'New' || !l.createdAt) return '';
-  const d = new Date(l.createdAt.slice(0, 19).replace(' ', 'T') + '+05:30');
-  if (isNaN(d.getTime())) return '';
-  return new Date(d.getTime() + FIRST_CALL_HOURS * 3600000).toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16);
+  const isNew = normStage(l.stage) === 'New';
+  const stored = l.nextFollowUp ? l.nextFollowUp.slice(0, 16) : '';
+  if (isNew && stored.endsWith(FIRST_CALL_CUTOFF)) return stored;
+  if (isNew && l.createdAt) return firstCallDue(l.createdAt);
+  return stored;
 }
 
 export function isOverdue(l: Parameters<typeof plannedOf>[0]): boolean {
