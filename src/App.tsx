@@ -302,6 +302,21 @@ function MainContent() {
                       <span>New Sale</span>
                   </button>
 
+                  {/* Leads CRM */}
+                  {user && (user.crmAdmin || user.isManager || ['NBD', 'Sales', 'Manager'].includes(user.team || '')) && (
+                    <button
+                      onClick={() => setView('crm')}
+                      className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
+                        view === 'crm'
+                          ? 'bg-slate-900 text-white border-slate-800 shadow-md'
+                          : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      <Users size={15} />
+                      <span>CRM</span>
+                    </button>
+                  )}
+
                   {/* 2. No Sale */}
                   <button 
                     onClick={() => setView('noSale')} 
@@ -366,21 +381,6 @@ function MainContent() {
                       <FileText size={15} />
                       <span>Proforma Invoice Generator</span>
                   </button>
-
-                  {/* Leads CRM */}
-                  {user && (user.crmAdmin || user.isManager || ['NBD', 'Sales', 'Manager'].includes(user.team || '')) && (
-                    <button
-                      onClick={() => setView('crm')}
-                      className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
-                        view === 'crm'
-                          ? 'bg-slate-900 text-white border-slate-800 shadow-md'
-                          : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                      }`}
-                    >
-                      <Users size={15} />
-                      <span>CRM</span>
-                    </button>
-                  )}
 
                   {/* Quick links */}
                   <button 
