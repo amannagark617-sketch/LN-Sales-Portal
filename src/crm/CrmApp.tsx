@@ -16,7 +16,8 @@ export function CrmApp() {
   const [selected, setSelected] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [step, setStep] = useState('');
-  const [fOwner, setFOwner] = useState('');
+  const [fNbd, setFNbd] = useState('');
+  const [fSales, setFSales] = useState('');
   const [fSource, setFSource] = useState('');
   const loadedAt = useRef(0);
 
@@ -64,10 +65,10 @@ export function CrmApp() {
     if (!data) return [];
     const s = q.trim().toLowerCase();
     return data.leads.filter(l =>
-      (!fOwner || l.ownerId === fOwner) && (!fSource || l.source === fSource) &&
+      (!fNbd || l.nbdId === fNbd) && (!fSales || l.salesId === fSales) && (!fSource || l.source === fSource) &&
       (!s || [fullName(l), l.phone, l.enquiryNo, l.city, l.company, l.email].join(' ').toLowerCase().includes(s))
     ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [data, q, fOwner, fSource]);
+  }, [data, q, fNbd, fSales, fSource]);
 
   const steps = useMemo(() => {
     const openSteps = STAGES.filter(x => x !== 'Converted').map(st => ({ id: st, label: stepLabel(st), count: base.filter(l => l.outcome === 'Open' && l.stage === st).length }));
@@ -82,9 +83,16 @@ export function CrmApp() {
     step === '' ? l.outcome === 'Open' : ['Closed', 'Lost', 'Invalid'].includes(step) ? l.outcome === step : l.outcome === 'Open' && l.stage === step
   ), [base, step]);
 
-  const owners = useMemo(() => {
+  const nbdPeople = useMemo(() => {
     const m = new Map<string, string>();
-    data?.leads.forEach(l => { if (l.ownerId) m.set(l.ownerId, l.ownerName); });
+    data?.nbd.forEach(n => m.set(n.id, n.name));
+    data?.leads.forEach(l => { if (l.nbdId && !m.has(l.nbdId)) m.set(l.nbdId, l.nbdName || l.nbdId); });
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [data]);
+  const salesPeople = useMemo(() => {
+    const m = new Map<string, string>();
+    data?.sales.forEach(n => m.set(n.id, n.name));
+    data?.leads.forEach(l => { if (l.salesId && !m.has(l.salesId)) m.set(l.salesId, l.salesName || l.salesId); });
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [data]);
   const sources = useMemo(() => [...new Set(data?.leads.map(l => l.source).filter(Boolean))].sort(), [data]);
@@ -138,10 +146,11 @@ export function CrmApp() {
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
         <input className={`${inputCls} col-span-2`} placeholder="Search name, phone, enquiry no" value={q} onChange={e => setQ(e.target.value)} />
-        <Combo value={fOwner} onChange={setFOwner} placeholder="All owners" clearLabel="All owners" ariaLabel="Owner" options={owners.map(([id, n]) => ({ value: id, label: n }))} />
-        <Combo value={fSource} onChange={setFSource} placeholder="All sources" clearLabel="All sources" ariaLabel="Source" options={opts(sources)} />
+        <Combo value={fNbd} onChange={setFNbd} placeholder="All NBD" clearLabel="All NBD" ariaLabel="NBD" options={nbdPeople.map(([id, n]) => ({ value: id, label: n }))} />
+        <Combo value={fSales} onChange={setFSales} placeholder="All salespeople" clearLabel="All salespeople" ariaLabel="Salesperson" options={salesPeople.map(([id, n]) => ({ value: id, label: n }))} />
+        <div className="col-span-2 md:col-span-1"><Combo value={fSource} onChange={setFSource} placeholder="All sources" clearLabel="All sources" ariaLabel="Source" options={opts(sources)} /></div>
       </div>
       <div className="text-xs text-slate-500 mb-2 px-1">{filtered.length} leads · newest first</div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
