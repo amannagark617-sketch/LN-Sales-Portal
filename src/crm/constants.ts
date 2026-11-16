@@ -70,7 +70,7 @@ export const nextSalesStage = (s: string): string => {
 };
 
 const FIRST_CALL_CUTOFF = '18:30';
-const istNow = (): string => new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16);
+export const istNow = (): string => new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }).slice(0, 16);
 
 /** A new lead is due by 6:30 pm on the day it came in. Anything after 6:30 pm is due by 6:30 pm the next day. */
 function firstCallDue(createdAt: string): string {

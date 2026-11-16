@@ -1,4 +1,5 @@
 import React from 'react';
+import { Phone, MessageCircle } from 'lucide-react';
 import { stepLabel, plannedOf, isOverdue } from './constants';
 import type { Lead } from './constants';
 
@@ -96,22 +97,26 @@ export function Combo({ value, onChange, options, placeholder = 'Select', clearL
 
 export const opts = (arr: string[]): ComboOption[] => arr.map(v => ({ value: v, label: v }));
 
-const STAGE_TONE: Record<string, string> = {
-  'First call': 'bg-slate-100 text-slate-700 border-slate-200',
-  'Not connected': 'bg-orange-50 text-orange-800 border-orange-200',
-  'Follow-up': 'bg-sky-50 text-sky-800 border-sky-200',
-  '1st meeting': 'bg-indigo-50 text-indigo-800 border-indigo-200',
-  'Send proposal': 'bg-amber-50 text-amber-800 border-amber-200',
-  Negotiation: 'bg-lime-50 text-lime-800 border-lime-200',
-  Converted: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  Invalid: 'bg-slate-100 text-slate-600 border-slate-300',
-  Lost: 'bg-rose-50 text-rose-800 border-rose-200',
-  Closed: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+const STAGE_DOT: Record<string, string> = {
+  'First call': 'bg-slate-400',
+  'Not connected': 'bg-orange-500',
+  'Follow-up': 'bg-sky-500',
+  '1st meeting': 'bg-indigo-500',
+  'Send proposal': 'bg-amber-500',
+  Negotiation: 'bg-lime-600',
+  Converted: 'bg-emerald-600',
+  Invalid: 'bg-slate-400',
+  Lost: 'bg-rose-500',
+  Closed: 'bg-emerald-600',
 };
 
 export function Tag({ text }: { text: string }) {
   const t = stepLabel(text);
-  return <span className={`inline-block rounded px-2 py-0.5 text-[11px] font-bold border whitespace-nowrap ${STAGE_TONE[t] || STAGE_TONE['First call']}`}>{t}</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 whitespace-nowrap">
+      <span className={`h-2 w-2 ${STAGE_DOT[t] || 'bg-slate-400'}`} aria-hidden />{t}
+    </span>
+  );
 }
 
 export const isSelfGenerated = (l: Lead): boolean => l.group === 'Direct';
@@ -155,32 +160,58 @@ export function DateField({ value, onChange, min }: { value: string; onChange: (
   );
 }
 
-/** One lead as a row: works as a tap target on a phone and as a table-like row on a desktop. */
+const clock = (d: string): string => {
+  const [h, m] = d.slice(11, 16).split(':').map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+};
+const span = (mins: number): string => mins < 60 ? `${Math.max(1, Math.round(mins))} min` : mins < 1440 ? `${Math.round(mins / 60)} hr${Math.round(mins / 60) === 1 ? '' : 's'}` : `${Math.round(mins / 1440)} day${Math.round(mins / 1440) === 1 ? '' : 's'}`;
+
+/** Plain words for when a lead is due: "2 hrs late", "Due in 40 min", "Today, 6:30 pm". */
+export function dueText(lead: Lead): { text: string; late: boolean } {
+  const p = plannedOf(lead);
+  if (!p || lead.outcome !== 'Open') return { text: '', late: false };
+  const late = isOverdue(lead);
+  const today = todayStr();
+  if (p.length <= 10) {
+    const days = Math.round((new Date(today + 'T00:00:00').getTime() - new Date(p + 'T00:00:00').getTime()) / 86400000);
+    if (late) return { text: `${span(days * 1440)} late`, late };
+    return { text: p === today ? 'Due today' : p === addDays(1) ? 'Tomorrow' : shortDate(p), late };
+  }
+  const diff = (new Date(p.replace(' ', 'T') + ':00+05:30').getTime() - Date.now()) / 60000;
+  if (late) return { text: `${span(-diff)} late`, late };
+  if (diff < 360) return { text: `Due in ${span(diff)}`, late };
+  const day = p.slice(0, 10);
+  return { text: `${day === today ? 'Today' : day === addDays(1) ? 'Tomorrow' : shortDate(day)}, ${clock(p)}`, late };
+}
+
+/** One lead as a row: who, what is next, and one tap to call or WhatsApp. */
 export function LeadRow({ lead, selected, onOpen, showOwner }: { lead: Lead; selected?: boolean; onOpen: () => void; showOwner?: boolean }) {
   const open = lead.outcome === 'Open';
-  const planned = plannedOf(lead);
-  const overdue = isOverdue(lead);
+  const due = dueText(lead);
+  const digits = (lead.phone || '').replace(/\D/g, '').slice(-10);
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
-    <button onClick={onOpen}
-      className={`w-full text-left px-4 py-3 border-b border-slate-100 last:border-b-0 flex items-start gap-3 ${selected ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'}`}>
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+      className={`w-full text-left pl-3 pr-3 py-3 border-b border-slate-100 last:border-b-0 flex items-center gap-3 cursor-pointer border-l-[3px] ${selected ? 'bg-teal-50/60 border-l-teal-700' : 'bg-white hover:bg-slate-50 border-l-transparent'}`}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="font-bold text-slate-900 truncate">{fullName(lead)}</span>
-          <span className="text-[11px] text-slate-400 shrink-0">{lead.enquiryNo}</span>
           <KindTag lead={lead} />
         </div>
-        <div className="text-xs text-slate-500 mt-0.5 truncate">
-          {[lead.source, lead.city, lead.requirement].filter(Boolean).join(' · ')}
+        <div className="text-xs text-slate-500 mt-0.5 truncate">{[lead.city, lead.requirement, lead.source].filter(Boolean).join(' · ')}</div>
+        <div className="flex items-center gap-3 mt-1.5 min-w-0">
+          <Tag text={open ? lead.stage : lead.outcome} />
+          {due.text && <span className={`text-xs font-bold truncate ${due.late ? 'text-rose-700' : 'text-slate-500'}`}>{due.text}</span>}
         </div>
-        {showOwner && <div className="text-xs text-slate-500 mt-0.5 truncate">{lead.ownerName ? `With ${lead.ownerName}` : 'Waiting for an NBD person'}</div>}
+        {showOwner && <div className="text-xs text-slate-500 mt-1 truncate">{lead.ownerName ? `With ${lead.ownerName}` : 'Needs a caller'}</div>}
       </div>
-      <div className="text-right shrink-0 space-y-1">
-        <Tag text={open ? lead.stage : lead.outcome} />
-        {open && planned && (
-          <div className={`text-[11px] font-bold ${overdue ? 'text-rose-600' : 'text-slate-500'}`}>{overdue ? 'Overdue · ' : ''}{shortDate(planned)}</div>
-        )}
-      </div>
-    </button>
+      {open && digits.length === 10 && (
+        <div className="flex gap-2 shrink-0">
+          <a href={`tel:+91${digits}`} onClick={stop} aria-label={`Call ${fullName(lead)}`} className="h-10 w-10 rounded-md bg-teal-700 text-white flex items-center justify-center hover:bg-teal-800"><Phone size={17} /></a>
+          <a href={`https://wa.me/91${digits}`} target="_blank" rel="noreferrer" onClick={stop} aria-label={`WhatsApp ${fullName(lead)}`} className="h-10 w-10 rounded-md border border-slate-300 bg-white text-slate-700 flex items-center justify-center hover:bg-slate-50"><MessageCircle size={17} /></a>
+        </div>
+      )}
+    </div>
   );
 }
 
