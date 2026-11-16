@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, Phone, MessageCircle, Mail, FileText } from 'lucide-react';
+import { ChevronLeft, Phone, MessageCircle, Mail, FileText, Plus } from 'lucide-react';
 import { crmAction, fetchTimeline, CrmData } from './api';
 import { Lead, TimelineEntry, SALES_STAGES, MEETING_TYPES, normStage, nextSalesStage, plannedOf, isOverdue, stepLabel } from './constants';
-import { Field, Combo, opts, inputCls, areaCls, btnPrimary, btnGhost, DateField, Tag, KindTag, fullName, shortDate, todayStr } from './ui';
+import { Field, Combo, opts, inputCls, areaCls, btnPrimary, btnGhost, btnSm, DateField, Tag, KindTag, Stepper, dueText, fullName, shortDate, todayStr } from './ui';
 
 type Status = 'Open' | 'Lost' | 'Invalid' | 'Closed';
 
@@ -17,7 +17,7 @@ function Group({ label, required, children }: { label: string; required?: boolea
 
 function Choice<T extends string>({ options, value, onChange, labels }: { options: T[]; value: T | ''; onChange: (v: T) => void; labels?: Partial<Record<T, string>> }) {
   return (
-    <div className={`grid border border-slate-300 rounded-lg overflow-hidden`} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+    <div className={`grid border border-slate-300 rounded-md overflow-hidden`} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
       {options.map(o => (
         <button key={o} type="button" onClick={() => onChange(o)}
           className={`min-h-[44px] px-1 text-[13px] font-bold border-r border-slate-300 last:border-r-0 leading-tight ${value === o ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{labels?.[o] || o}</button>
@@ -149,74 +149,53 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
   if (ctx === 'nbd' && f.status === 'Open') moveTo = canAlign && f.assign === 'Salesperson' ? `${SALES_STAGES.includes(stage) ? stage : '1st meeting'} with the salesperson` : stage;
   if (ctx === 'sales' && f.status === 'Open') moveTo = canBack && f.assign === 'Sales coordinator' ? `${lead.nbdName || 'the sales coordinator'}` : nextSalesStage(stage);
 
+  const due = dueText(lead);
+  const sec = 'px-4 md:px-5 py-4 border-b border-slate-200';
+  const h3 = 'text-[13px] font-extrabold text-slate-900';
+  const nbdNotes = lead.nbdId && lead.nbdId !== me.id && (lead.ownerTeam === 'Sales' || lead.salesId)
+    ? (timeline || []).filter(t => t.byId === lead.nbdId && t.text && t.type !== 'Created') : [];
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-slate-200 flex items-start gap-3">
-        <button onClick={onClose} aria-label="Back to list" className="md:hidden h-10 w-10 -ml-1 rounded-lg border border-slate-200 flex items-center justify-center shrink-0"><ChevronLeft size={20} /></button>
+    <div className="bg-white border border-slate-200 rounded-lg md:border-0 md:rounded-none">
+      <div className="px-4 md:px-5 py-3.5 border-b border-slate-200 flex items-start gap-3 md:sticky md:top-0 bg-white z-20 rounded-t-lg">
+        <button onClick={onClose} aria-label="Back to list" className="md:hidden h-10 w-10 -ml-1 rounded-md border border-slate-300 flex items-center justify-center shrink-0"><ChevronLeft size={20} /></button>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-extrabold text-slate-900 truncate">{fullName(lead)}</h2>
-            <Tag text={open ? stage : lead.outcome} />
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-xl font-extrabold text-slate-900 truncate leading-tight">{fullName(lead)}</h2>
             <KindTag lead={lead} />
           </div>
-          <div className="text-xs text-slate-500 mt-0.5">{lead.enquiryNo} · {lead.source}{lead.ownerName ? ` · with ${lead.ownerName}` : ' · waiting for an NBD person'}</div>
+          <div className="text-xs text-slate-500 mt-1">{lead.enquiryNo} · {lead.source}{lead.ownerName ? ` · with ${lead.ownerName}` : ' · needs a caller'}</div>
         </div>
       </div>
 
-      <div className="p-4 grid grid-cols-3 gap-2 border-b border-slate-100">
-        <a href={`tel:+91${digits}`} className={btnPrimary}><Phone size={16} /> Call</a>
-        <a href={`https://wa.me/91${digits}`} target="_blank" rel="noreferrer" className={btnGhost}><MessageCircle size={16} /> WhatsApp</a>
-        {lead.email ? <a href={`mailto:${lead.email}`} className={btnGhost}><Mail size={16} /> Email</a> : <span />}
-      </div>
-
-      {((onQuote && iOwn && open) || quotes.length > 0) && (
-        <div className="px-4 py-3 border-b border-slate-100">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-bold text-slate-800">Quotations{quotes.length > 0 && <span className="ml-1.5 text-xs font-normal text-slate-500">{quotes.length}</span>}</div>
-            {onQuote && iOwn && open && <button onClick={() => onQuote(lead)} className="h-10 px-4 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 inline-flex items-center gap-2"><FileText size={16} /> Create quotation</button>}
+      {open ? (
+        <div className={`${sec} ${overdue ? 'bg-rose-50/60' : ''}`}>
+          <Stepper stage={stage} />
+          <div className="mt-3.5 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-slate-500">{stepLabel(stage)}{planned ? ` · due ${shortDate(planned)}` : ''}</div>
+              <div className={`text-lg font-extrabold leading-tight mt-0.5 ${overdue ? 'text-rose-700' : 'text-slate-900'}`}>{due.text || 'No follow-up date set'}</div>
+            </div>
+            {canUpdate && (
+              <button onClick={() => { setPanel(panel === 'update' ? null : 'update'); setError(''); }} aria-expanded={panel === 'update'}
+                className={`${panel === 'update' ? btnGhost : btnPrimary} !h-11 shrink-0 min-w-[104px]`}>{panel === 'update' ? 'Cancel' : 'Update'}</button>
+            )}
           </div>
-          {quotes.length > 0 ? (
-            <ul className="mt-2 divide-y divide-slate-100">
-              {quotes.map(q => (
-                <li key={q.quoteNo} className="py-2.5">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <div className="min-w-0">
-                      <span className="font-bold text-slate-900">{q.quoteNo}</span>
-                      <span className="ml-2 text-xs text-slate-500">{q.docType === 'PI' ? 'Proforma invoice' : 'Quotation'} · {q.brand}</span>
-                      <div className="text-xs text-slate-500">{shortDate(q.date)}{q.byName ? ` · ${q.byName}` : ''}{q.convertedTo ? ` · converted to ${q.convertedTo}` : ''}</div>
-                    </div>
-                    <div className="font-bold text-slate-900 shrink-0">Rs. {Number(q.amount || 0).toLocaleString('en-IN')}</div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {q.pdfUrl
-                      ? <a href={q.pdfUrl} target="_blank" rel="noreferrer" className="h-9 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50 inline-flex items-center gap-1.5"><FileText size={14} /> View PDF</a>
-                      : <span className="h-9 px-3 rounded-lg bg-slate-50 text-slate-500 text-xs inline-flex items-center">PDF is being prepared. Refresh in a moment.</span>}
-                    {onQuote && iOwn && open && q.docType === 'Quotation' && (
-                      <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: false })} className="h-9 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50">Revise</button>
-                    )}
-                    {onQuote && iOwn && open && q.docType === 'Quotation' && !q.convertedTo && (
-                      <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: true })} className="h-9 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800">Convert to PI</button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : <div className="mt-1 text-xs text-slate-500">No quotation made for this lead yet.</div>}
         </div>
-      )}
-
-      {open && (
-        <div className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${overdue ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+      ) : (
+        <div className={`${sec} bg-slate-50 flex items-center justify-between gap-3`}>
           <div className="min-w-0">
-            <div className="text-[11px] font-bold text-slate-500">{stepLabel(stage)} · planned</div>
-            <div className={`text-base font-extrabold ${overdue ? 'text-rose-700' : 'text-slate-900'}`}>{planned ? shortDate(planned) : 'Not set'}{overdue ? ' · Overdue' : ''}</div>
+            <Tag text={lead.outcome} />
+            <div className="text-sm text-slate-700 mt-1">
+              {lead.outcome === 'Closed' ? [lead.opf && `OPF ${lead.opf}`, lead.orderValue && `Rs. ${Number(lead.orderValue).toLocaleString('en-IN')}`].filter(Boolean).join(' · ') || 'Order closed' : lead.reason || 'No reason recorded'}
+            </div>
           </div>
-          {canUpdate && <button onClick={() => { setPanel(panel === 'update' ? null : 'update'); setError(''); }} className={`${btnPrimary} shrink-0`}>Update</button>}
+          {canReopen && panel !== 'reopen' && <button className={`${btnGhost} !h-10 shrink-0`} onClick={() => { setPanel('reopen'); setError(''); }}>Reopen lead</button>}
         </div>
       )}
 
       {(canUpdate && panel === 'update') && (
-        <div className="p-4 border-b border-slate-100 space-y-3">
+        <div className="px-4 md:px-5 py-4 border-b border-slate-200 bg-slate-50 space-y-3">
           {ctx === 'call' && (
             <>
               <Group label="Call result" required>
@@ -241,7 +220,7 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {MEETING_TYPES.map(m => (
                   <button key={m} type="button" onClick={() => set('mtype', m)}
-                    className={`min-h-[44px] rounded-lg border text-[13px] font-bold ${f.mtype === m ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>{m}</button>
+                    className={`min-h-[44px] rounded-md border text-[13px] font-bold ${f.mtype === m ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>{m}</button>
                 ))}
               </div>
             </Group>
@@ -291,30 +270,130 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
             </>
           )}
 
-          {error && <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
-          <div className="sticky bottom-16 md:bottom-0 bg-white pt-2 pb-1 -mb-1 z-10">
+          {error && <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+          <div className="sticky bottom-16 md:bottom-0 bg-slate-50 pt-2 pb-1 -mb-1 z-10">
             {moveTo && <div className="text-xs text-slate-500 mb-2">Moves to: <span className="font-bold text-slate-800">{moveTo}</span></div>}
             <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
           </div>
         </div>
       )}
 
-      {canReopen && (
-        <div className="p-4 border-b border-slate-100 space-y-3">
-          {panel !== 'reopen'
-            ? <button className={btnGhost} onClick={() => { setPanel('reopen'); setError(''); }}>Reopen lead</button>
-            : (
-              <>
-                <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} placeholder="Why is it back?" /></Field>
-                {nextField}
-                <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => run({ action: 'reopen', nextFollowUp: f.next, text: f.text })}>{busy ? 'Saving…' : 'Reopen lead'}</button>
-              </>
-            )}
+      {canReopen && panel === 'reopen' && (
+        <div className={`${sec} bg-slate-50/60 space-y-3`}>
+          <Field label="Remarks"><textarea className={areaCls} rows={2} value={f.text} onChange={e => set('text', e.target.value)} placeholder="Why is it back?" /></Field>
+          {nextField}
+          <div className="grid grid-cols-2 gap-3">
+            <button className={btnGhost} onClick={() => setPanel(null)}>Cancel</button>
+            <button className={btnPrimary} disabled={busy} onClick={() => run({ action: 'reopen', nextFollowUp: f.next, text: f.text })}>{busy ? 'Saving…' : 'Reopen lead'}</button>
+          </div>
         </div>
       )}
 
+      {error && panel !== 'update' && <div className="mx-4 md:mx-5 mt-3 rounded-md border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+
+      <div className={`${sec} @container`}>
+        <div className={`grid gap-2 ${lead.email ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]' : 'grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]'}`}>
+          <a href={`tel:+91${digits}`} className="h-11 px-2 rounded-md bg-teal-50 text-teal-900 border border-teal-200 text-sm font-bold hover:bg-teal-100 inline-flex items-center justify-center gap-2 whitespace-nowrap"><Phone size={16} className="shrink-0" /><span className="tabular-nums">{digits.length === 10 ? `${digits.slice(0, 5)} ${digits.slice(5)}` : 'Call'}</span></a>
+          <a href={`https://wa.me/91${digits}`} target="_blank" rel="noreferrer" className={`${btnGhost} !h-11 !px-2 whitespace-nowrap`}><MessageCircle size={16} className={`shrink-0 ${lead.email ? 'hidden @sm:block' : ''}`} />WhatsApp</a>
+          {lead.email && <a href={`mailto:${lead.email}`} className={`${btnGhost} !h-11 !px-2 whitespace-nowrap`}><Mail size={16} className="shrink-0 hidden @sm:block" />Email</a>}
+        </div>
+      </div>
+
+      {nbdNotes.length > 0 && (
+        <div className={`${sec} bg-slate-50`}>
+          <h3 className={h3}>What {lead.nbdName || 'the sales coordinator'} did on this lead</h3>
+          <div className="text-xs text-slate-500 mt-0.5 mb-3">Read this before you talk to the customer.</div>
+          <ul className="space-y-3">
+            {[...nbdNotes].reverse().slice(0, 5).map((t, i) => (
+              <li key={i} className="text-sm border-l-2 border-teal-700 pl-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-bold text-slate-900">{t.type}</span>
+                  <span className="text-[11px] text-slate-500 shrink-0">{when(t.time)}</span>
+                </div>
+                <div className="text-slate-700 whitespace-pre-wrap">{t.text}</div>
+                {t.nextFollowUp && <div className="text-xs text-slate-500">Next follow-up {shortDate(t.nextFollowUp)}</div>}
+              </li>
+            ))}
+          </ul>
+          {nbdNotes.length > 5 && <div className="text-xs text-slate-500 mt-2">The full history is in the timeline below.</div>}
+        </div>
+      )}
+
+      <div className={sec}>
+        <h3 className={`${h3} mb-3`}>Details</h3>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <Info label="Requirement" value={lead.requirement} />
+          <Info label="Quantity" value={lead.quantity} />
+          <Info label="City" value={[lead.city, lead.state].filter(Boolean).join(', ')} />
+          <Info label="Zone" value={lead.zone} />
+          <Info label="Phone" value={lead.phone} />
+          <Info label="Email" value={lead.email} />
+          <Info label="Meeting" value={lead.meetingDate ? `${shortDate(lead.meetingDate)} ${lead.meetingTime}`.trim() : ''} />
+          <Info label="Segment" value={lead.segment} />
+          <Info label="Company" value={[lead.company, lead.designation].filter(Boolean).join(', ')} />
+          <Info label="Campaign" value={[lead.utmMedium, lead.utmCampaign].filter(Boolean).join(' · ')} />
+          <Info label="NBD (first caller)" value={lead.nbdName} />
+          <Info label="Salesperson" value={lead.salesName} />
+          <div className="col-span-2"><Info label="Notes" value={lead.notes} /></div>
+        </div>
+      </div>
+
+      {((onQuote && iOwn && open) || quotes.length > 0) && (
+        <div className={sec}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className={h3}>Quotations{quotes.length > 0 && <span className="ml-1.5 font-bold text-slate-400 tabular-nums">{quotes.length}</span>}</h3>
+            {onQuote && iOwn && open && <button onClick={() => onQuote(lead)} className={btnSm}><Plus size={14} /> New quotation</button>}
+          </div>
+          {quotes.length > 0 ? (
+            <ul className="mt-2 divide-y divide-slate-100">
+              {quotes.map(q => (
+                <li key={q.quoteNo} className="py-3 last:pb-0">
+                  <div className="flex items-start justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900">{q.quoteNo}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{q.docType === 'PI' ? 'Proforma invoice' : 'Quotation'} · {q.brand} · {shortDate(q.date)}{q.byName ? ` · ${q.byName}` : ''}</div>
+                      {q.convertedTo && <div className="text-xs text-slate-500">Converted to {q.convertedTo}</div>}
+                    </div>
+                    <div className="font-extrabold text-slate-900 shrink-0 tabular-nums">Rs. {Number(q.amount || 0).toLocaleString('en-IN')}</div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {q.pdfUrl
+                      ? <a href={q.pdfUrl} target="_blank" rel="noreferrer" className={btnSm}><FileText size={14} /> View PDF</a>
+                      : <span className="h-9 px-3 rounded-md bg-slate-50 text-slate-500 text-xs inline-flex items-center">PDF is being prepared. Refresh in a moment.</span>}
+                    {onQuote && iOwn && open && q.docType === 'Quotation' && <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: false })} className={btnSm}>Revise</button>}
+                    {onQuote && iOwn && open && q.docType === 'Quotation' && !q.convertedTo && (
+                      <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: true })} className={`${btnSm} !border-teal-700 !text-teal-800`}>Convert to PI</button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : <div className="mt-1 text-xs text-slate-500">No quotation made for this lead yet.</div>}
+        </div>
+      )}
+
+      <div className="px-4 md:px-5 py-4">
+        <h3 className={`${h3} mb-3`}>Timeline</h3>
+        {timeline === null && <div className="text-sm text-slate-500">Loading…</div>}
+        {timeline && timeline.length === 0 && <div className="text-sm text-slate-500">Nothing yet.</div>}
+        <ol className="border-l border-slate-200 ml-1 space-y-4">
+          {timeline && [...timeline].reverse().map((t, i) => (
+            <li key={i} className="relative pl-4">
+              <span className={`absolute -left-[4.5px] top-1.5 h-2 w-2 ${i === 0 ? 'bg-teal-700' : 'bg-slate-300'}`} aria-hidden />
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm font-bold text-slate-900">{t.type}{t.byName ? <span className="font-normal text-slate-500"> · {t.byName}</span> : ''}</span>
+                <span className="text-[11px] text-slate-500 shrink-0">{when(t.time)}</span>
+              </div>
+              {t.text && <div className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{t.text}</div>}
+              {(t.fromName || t.toName) && <div className="text-xs text-slate-500 mt-0.5">{t.fromName ? `${t.fromName} to ` : 'To '}{t.toName}</div>}
+              {t.nextFollowUp && <div className="text-xs text-slate-500 mt-0.5">Next follow-up {shortDate(t.nextFollowUp)}</div>}
+            </li>
+          ))}
+        </ol>
+      </div>
+
       {open && boss && (
-        <div className="px-4 py-3 border-b border-slate-100 space-y-3">
+        <div className="px-4 md:px-5 py-3 border-t border-slate-200 space-y-3">
           <button className="text-xs font-bold text-slate-600 underline" onClick={() => { setPanel(panel === 'reassign' ? null : 'reassign'); setError(''); }}>Reassign this lead</button>
           {panel === 'reassign' && (
             <div className="space-y-3">
@@ -327,66 +406,6 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
           )}
         </div>
       )}
-
-      {error && panel !== 'update' && <div className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
-
-      {lead.nbdId && lead.nbdId !== me.id && (lead.ownerTeam === 'Sales' || lead.salesId) && (() => {
-        const mine = (timeline || []).filter(t => t.byId === lead.nbdId && t.text && t.type !== 'Created');
-        if (!mine.length) return null;
-        return (
-          <div className="p-4 border-b border-slate-100 bg-blue-50/50">
-            <h3 className="text-sm font-bold text-slate-800 mb-0.5">What {lead.nbdName || 'the sales coordinator'} did on this lead</h3>
-            <div className="text-xs text-slate-500 mb-3">Read this before you talk to the customer.</div>
-            <ul className="space-y-3">
-              {[...mine].reverse().slice(0, 5).map((t, i) => (
-                <li key={i} className="text-sm">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-bold text-slate-900">{t.type}</span>
-                    <span className="text-[11px] text-slate-400 shrink-0">{when(t.time)}</span>
-                  </div>
-                  <div className="text-slate-700 whitespace-pre-wrap">{t.text}</div>
-                  {t.nextFollowUp && <div className="text-xs text-slate-500">Next follow-up {shortDate(t.nextFollowUp)}</div>}
-                </li>
-              ))}
-            </ul>
-            {mine.length > 5 && <div className="text-xs text-slate-500 mt-2">The full history is in the timeline below.</div>}
-          </div>
-        );
-      })()}
-
-      <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-slate-100">
-        <Info label="Phone" value={lead.phone} />
-        <Info label="Email" value={lead.email} />
-        <Info label="City" value={[lead.city, lead.state].filter(Boolean).join(', ')} />
-        <Info label="Zone" value={lead.zone} />
-        <Info label="Requirement" value={lead.requirement} />
-        <Info label="Quantity" value={lead.quantity} />
-        <Info label="Segment" value={lead.segment} />
-        <Info label="Company" value={[lead.company, lead.designation].filter(Boolean).join(', ')} />
-        <Info label="Campaign" value={[lead.utmMedium, lead.utmCampaign].filter(Boolean).join(' · ')} />
-        <Info label="Meeting" value={lead.meetingDate ? `${shortDate(lead.meetingDate)} ${lead.meetingTime}`.trim() : ''} />
-        <Info label={lead.outcome === 'Closed' ? 'OPF and value' : 'Reason'} value={lead.outcome === 'Closed' ? [lead.opf, lead.orderValue].filter(Boolean).join(' · ') : lead.reason} />
-        <div className="col-span-2"><Info label="Notes" value={lead.notes} /></div>
-      </div>
-
-      <div className="p-4">
-        <h3 className="text-sm font-bold text-slate-800 mb-3">Timeline</h3>
-        {timeline === null && <div className="text-sm text-slate-500">Loading…</div>}
-        {timeline && timeline.length === 0 && <div className="text-sm text-slate-500">Nothing yet.</div>}
-        <ol className="space-y-4">
-          {timeline && [...timeline].reverse().map((t, i) => (
-            <li key={i} className="border-l-2 border-slate-200 pl-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-bold text-slate-900">{t.type}{t.byName ? ` · ${t.byName}` : ''}</span>
-                <span className="text-[11px] text-slate-400 shrink-0">{when(t.time)}</span>
-              </div>
-              {t.text && <div className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{t.text}</div>}
-              {(t.fromName || t.toName) && <div className="text-xs text-slate-500 mt-0.5">{t.fromName ? `${t.fromName} to ` : 'To '}{t.toName}</div>}
-              {t.nextFollowUp && <div className="text-xs text-slate-500 mt-0.5">Next follow-up {shortDate(t.nextFollowUp)}</div>}
-            </li>
-          ))}
-        </ol>
-      </div>
     </div>
   );
 }

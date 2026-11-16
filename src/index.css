@@ -77,3 +77,9 @@ body {
 @keyframes stepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .step-in { animation: stepIn 0.22s ease-out; }
 @media (prefers-reduced-motion: reduce) { .step-in { animation: none; } }
+
+/* Slim scrollbar for panes that scroll on their own */
+.thin-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.thin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }

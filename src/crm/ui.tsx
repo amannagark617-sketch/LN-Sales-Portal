@@ -1,15 +1,18 @@
 import React from 'react';
 import { Phone, MessageCircle } from 'lucide-react';
-import { stepLabel, plannedOf, isOverdue } from './constants';
+import { stepLabel, plannedOf, isOverdue, normStage } from './constants';
 import type { Lead } from './constants';
 
 export const todayStr = (): string => new Date().toLocaleDateString('en-CA');
 export const addDays = (n: number): string => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA'); };
 
-export const inputCls = 'w-full h-12 rounded-lg border border-slate-300 bg-white px-3 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-slate-800 disabled:bg-slate-50';
-export const areaCls = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-slate-800';
-export const btnPrimary = 'h-12 px-5 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 inline-flex items-center justify-center gap-2';
-export const btnGhost = 'h-12 px-4 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 disabled:opacity-50 inline-flex items-center justify-center gap-2';
+const focusCls = 'focus:outline-none focus:ring-2 focus:ring-teal-700/25 focus:border-teal-700';
+const focusBtn = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2';
+export const inputCls = `w-full h-12 rounded-md border border-slate-300 bg-white px-3 text-[15px] text-slate-900 placeholder:text-slate-400 ${focusCls} disabled:bg-slate-50`;
+export const areaCls = `w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-[15px] text-slate-900 placeholder:text-slate-400 ${focusCls}`;
+export const btnPrimary = `h-12 px-5 rounded-md bg-teal-700 text-white text-sm font-bold hover:bg-teal-800 active:bg-teal-900 disabled:opacity-50 inline-flex items-center justify-center gap-2 ${focusBtn}`;
+export const btnGhost = `h-12 px-4 rounded-md border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 disabled:opacity-50 inline-flex items-center justify-center gap-2 ${focusBtn}`;
+export const btnSm = `h-9 px-3 rounded-md border border-slate-300 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 inline-flex items-center justify-center gap-1.5 ${focusBtn}`;
 
 export function Field({ label, required, children, hint }: { label: string; required?: boolean; children: React.ReactNode; hint?: string }) {
   return (
@@ -24,8 +27,8 @@ export function Field({ label, required, children, hint }: { label: string; requ
 export interface ComboOption { value: string; label: string; group?: string }
 
 /** Searchable dropdown. Type to filter, tap or press Enter to pick. */
-export function Combo({ value, onChange, options, placeholder = 'Select', clearLabel, ariaLabel }: {
-  value: string; onChange: (v: string) => void; options: ComboOption[]; placeholder?: string; clearLabel?: string; ariaLabel?: string;
+export function Combo({ value, onChange, options, placeholder = 'Select', clearLabel, ariaLabel, dense }: {
+  value: string; onChange: (v: string) => void; options: ComboOption[]; placeholder?: string; clearLabel?: string; ariaLabel?: string; dense?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
@@ -57,7 +60,7 @@ export function Combo({ value, onChange, options, placeholder = 'Select', clearL
   return (
     <div ref={box} className="relative">
       <input
-        className={inputCls + ' pr-9'}
+        className={(dense ? inputCls.replace('h-12', 'h-10').replace('text-[15px]', 'text-sm') : inputCls) + ' pr-9'}
         aria-label={ariaLabel}
         role="combobox"
         aria-expanded={open}
@@ -71,7 +74,7 @@ export function Combo({ value, onChange, options, placeholder = 'Select', clearL
       />
       <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
       {open && (
-        <ul role="listbox" className="absolute z-40 left-0 right-0 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-300 bg-white shadow-lg">
+        <ul role="listbox" className="absolute z-40 left-0 right-0 mt-1 max-h-64 overflow-y-auto thin-scroll rounded-md border border-slate-300 bg-white shadow-lg">
           {rows.length === 0 && <li className="px-3 py-3 text-sm text-slate-500">No match</li>}
           {rows.map((o, i) => {
             const head = o.group && o.group !== lastGroup && !term ? o.group : '';
@@ -83,7 +86,7 @@ export function Combo({ value, onChange, options, placeholder = 'Select', clearL
                   onMouseDown={e => e.preventDefault()}
                   onClick={e => { e.preventDefault(); e.stopPropagation(); pick(o.value); }}
                   onMouseEnter={() => setHi(i)}
-                  className={`px-3 min-h-[44px] flex items-center text-[15px] cursor-pointer ${i === hi ? 'bg-slate-100' : ''} ${o.value === value ? 'font-bold text-slate-900' : 'text-slate-800'} ${o.value === '' ? 'text-slate-500' : ''}`}>
+                  className={`px-3 min-h-[44px] flex items-center text-[15px] cursor-pointer ${i === hi ? 'bg-slate-100' : ''} ${o.value === value ? 'font-bold text-teal-800' : 'text-slate-800'} ${o.value === '' ? 'text-slate-500' : ''}`}>
                   {o.label}
                 </li>
               </React.Fragment>
@@ -97,7 +100,7 @@ export function Combo({ value, onChange, options, placeholder = 'Select', clearL
 
 export const opts = (arr: string[]): ComboOption[] => arr.map(v => ({ value: v, label: v }));
 
-const STAGE_DOT: Record<string, string> = {
+export const STAGE_DOT: Record<string, string> = {
   'First call': 'bg-slate-400',
   'Not connected': 'bg-orange-500',
   'Follow-up': 'bg-sky-500',
@@ -110,13 +113,13 @@ const STAGE_DOT: Record<string, string> = {
   Closed: 'bg-emerald-600',
 };
 
+export function StageDot({ name }: { name: string }) {
+  return <span className={`inline-block h-2 w-2 shrink-0 ${STAGE_DOT[stepLabel(name)] || 'bg-slate-400'}`} aria-hidden />;
+}
+
 export function Tag({ text }: { text: string }) {
   const t = stepLabel(text);
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 whitespace-nowrap">
-      <span className={`h-2 w-2 ${STAGE_DOT[t] || 'bg-slate-400'}`} aria-hidden />{t}
-    </span>
-  );
+  return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 whitespace-nowrap"><StageDot name={t} />{t}</span>;
 }
 
 export const isSelfGenerated = (l: Lead): boolean => l.group === 'Direct';
@@ -124,13 +127,13 @@ export const isSelfGenerated = (l: Lead): boolean => l.group === 'Direct';
 export function KindTag({ lead }: { lead: Lead }) {
   const self = isSelfGenerated(lead);
   return (
-    <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold border whitespace-nowrap ${self ? 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
+    <span className={`inline-block rounded-[3px] px-1.5 py-px text-[11px] font-bold whitespace-nowrap ${self ? 'bg-fuchsia-50 text-fuchsia-800' : 'bg-blue-50 text-blue-800'}`}>
       {self ? 'Self generated' : 'Online'}
     </span>
   );
 }
 
-export const fullName =(l: Lead) => `${l.firstName} ${l.lastName}`.trim() || l.phone;
+export const fullName = (l: Lead) => `${l.firstName} ${l.lastName}`.trim() || l.phone;
 
 export function shortDate(d: string): string {
   if (!d) return '';
@@ -184,45 +187,58 @@ export function dueText(lead: Lead): { text: string; late: boolean } {
   return { text: `${day === today ? 'Today' : day === addDays(1) ? 'Tomorrow' : shortDate(day)}, ${clock(p)}`, late };
 }
 
-/** One lead as a row: who, what is next, and one tap to call or WhatsApp. */
-export function LeadRow({ lead, selected, onOpen, showOwner }: { lead: Lead; selected?: boolean; onOpen: () => void; showOwner?: boolean }) {
+export const phoneDigits = (l: Lead): string => (l.phone || '').replace(/\D/g, '').slice(-10);
+
+/** One lead in a list: who, what they want, where it stands, and one tap to call or WhatsApp. */
+export function LeadRow({ lead, selected, onOpen, meId }: { lead: Lead; selected?: boolean; onOpen: () => void; meId?: string }) {
   const open = lead.outcome === 'Open';
   const due = dueText(lead);
-  const digits = (lead.phone || '').replace(/\D/g, '').slice(-10);
+  const digits = phoneDigits(lead);
+  const who = !open ? '' : !lead.ownerId ? 'Needs a caller' : lead.ownerId !== meId ? `With ${lead.ownerName}` : '';
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
-    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      className={`w-full text-left pl-3 pr-3 py-3 border-b border-slate-100 last:border-b-0 flex items-center gap-3 cursor-pointer border-l-[3px] ${selected ? 'bg-teal-50/60 border-l-teal-700' : 'bg-white hover:bg-slate-50 border-l-transparent'}`}>
+    <div role="button" tabIndex={0} aria-current={selected || undefined} onClick={onOpen}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+      className={`relative flex gap-3 px-4 py-3 border-b border-slate-100 last:border-b-0 cursor-pointer focus-visible:outline-none focus-visible:bg-slate-50 ${selected ? 'bg-teal-50' : 'hover:bg-slate-50'}`}>
+      {selected && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-teal-700" aria-hidden />}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-slate-900 truncate">{fullName(lead)}</span>
-          <KindTag lead={lead} />
-        </div>
-        <div className="text-xs text-slate-500 mt-0.5 truncate">{[lead.city, lead.requirement, lead.source].filter(Boolean).join(' · ')}</div>
-        <div className="flex items-center gap-3 mt-1.5 min-w-0">
+        <div className="text-[15px] font-bold text-slate-900 truncate">{fullName(lead)}</div>
+        <div className="text-[13px] text-slate-600 truncate mt-0.5">{[lead.requirement, lead.city, lead.source].filter(Boolean).join(' · ') || lead.phone}</div>
+        <div className="flex items-center gap-2.5 mt-1.5 min-w-0 text-xs text-slate-500">
           <Tag text={open ? lead.stage : lead.outcome} />
-          {due.text && <span className={`text-xs font-bold truncate ${due.late ? 'text-rose-700' : 'text-slate-500'}`}>{due.text}</span>}
+          <KindTag lead={lead} />
+          {who && <span className={`truncate ${!lead.ownerId ? 'font-bold text-rose-700' : ''}`}>{who}</span>}
         </div>
-        {showOwner && <div className="text-xs text-slate-500 mt-1 truncate">{lead.ownerName ? `With ${lead.ownerName}` : 'Needs a caller'}</div>}
       </div>
-      {open && digits.length === 10 && (
-        <div className="flex gap-2 shrink-0">
-          <a href={`tel:+91${digits}`} onClick={stop} aria-label={`Call ${fullName(lead)}`} className="h-10 w-10 rounded-md bg-teal-700 text-white flex items-center justify-center hover:bg-teal-800"><Phone size={17} /></a>
-          <a href={`https://wa.me/91${digits}`} target="_blank" rel="noreferrer" onClick={stop} aria-label={`WhatsApp ${fullName(lead)}`} className="h-10 w-10 rounded-md border border-slate-300 bg-white text-slate-700 flex items-center justify-center hover:bg-slate-50"><MessageCircle size={17} /></a>
-        </div>
-      )}
+      <div className="shrink-0 flex flex-col items-end justify-between gap-2">
+        <span className={`text-xs font-bold whitespace-nowrap ${due.late ? 'text-rose-700' : 'text-slate-500'}`}>{due.text || (open ? '' : shortDate((lead.updatedAt || '').slice(0, 10)))}</span>
+        {open && digits.length === 10 && (
+          <div className="flex gap-1.5">
+            <a href={`tel:+91${digits}`} onClick={stop} aria-label={`Call ${fullName(lead)}`} title="Call" className="h-9 w-9 rounded-md bg-teal-50 text-teal-800 flex items-center justify-center hover:bg-teal-100"><Phone size={16} /></a>
+            <a href={`https://wa.me/91${digits}`} target="_blank" rel="noreferrer" onClick={stop} aria-label={`WhatsApp ${fullName(lead)}`} title="WhatsApp" className="h-9 w-9 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200"><MessageCircle size={16} /></a>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-export function Section({ title, count, children, tone }: { title: string; count?: number; children: React.ReactNode; tone?: 'alert' }) {
+const STEPS = ['First call', 'Follow-up', '1st meeting', 'Send proposal', 'Negotiation'];
+
+/** Where an open lead stands in the five working steps. */
+export function Stepper({ stage }: { stage: string }) {
+  const s = normStage(stage);
+  const at = s === 'New' || s === 'Not connected' ? 0 : Math.max(0, STEPS.indexOf(s));
   return (
-    <section className="mb-5">
-      <div className="flex items-baseline gap-2 px-1 mb-2">
-        <h3 className={`text-sm font-bold ${tone === 'alert' ? 'text-rose-700' : 'text-slate-800'}`}>{title}</h3>
-        {count !== undefined && <span className="text-xs text-slate-500">{count}</span>}
-      </div>
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">{children}</div>
-    </section>
+    <div className="@container">
+    <ol className="grid grid-cols-5 gap-1.5" aria-label={`Step ${at + 1} of 5: ${stepLabel(s)}`}>
+      {STEPS.map((label, i) => (
+        <li key={label} className="min-w-0">
+          <div className={`h-1.5 ${i < at ? 'bg-teal-700/35' : i === at ? 'bg-teal-700' : 'bg-slate-200'}`} />
+          <div className={`hidden @md:block mt-1.5 text-[11px] truncate ${i === at ? 'font-bold text-slate-900' : i < at ? 'text-slate-500' : 'text-slate-400'}`}>{i === at ? stepLabel(s) : label}</div>
+        </li>
+      ))}
+    </ol>
+    </div>
   );
 }
