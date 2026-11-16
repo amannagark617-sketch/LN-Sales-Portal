@@ -459,6 +459,38 @@ function syncOnlineLeads() {
   });
 }
 
+function repairOnlineDates() {
+  withLock_(function () {
+    var src = SpreadsheetApp.openById(LEAD_SHEET_ID).getSheets().filter(function (s) { return s.getSheetId() === LEAD_SHEET_GID; })[0];
+    if (!src) return;
+    var width = src.getLastColumn();
+    var C = feedCols_(src.getRange(1, 1, 1, width).getValues()[0]);
+    var vals = src.getLastRow() > 1 ? src.getRange(2, 1, src.getLastRow() - 1, width).getValues() : [];
+    var when = {};
+    vals.forEach(function (r) {
+      var e = str_(r[C.enq]), t = parseDetectedTime_(r[C.detected]);
+      if (e && t) when[e] = t;
+    });
+    var pa = tab_('PlannedActual'), paN = pa.getLastRow();
+    var paRows = paN > 1 ? pa.getRange(2, 1, paN - 1, PA_COLS.length).getValues() : [];
+    var fixed = 0;
+    readLeads_().forEach(function (l) {
+      var t = when[l.enquiryNo];
+      if (l.channel !== 'Online feed' || !t || l.createdAt === t) return;
+      l.createdAt = t;
+      if (l.stage === 'New' && l.outcome === 'Open' && l.ownerId && /18:30$/.test(l.nextFollowUp)) {
+        l.nextFollowUp = plannedCall_(t);
+        paRows.forEach(function (p, i) {
+          if (str_(p[0]) === l.enquiryNo && str_(p[1]) === 'First call' && !str_(p[4])) pa.getRange(i + 2, 4).setValue(l.nextFollowUp + ':00');
+        });
+      }
+      writeLead_(l);
+      fixed++;
+    });
+    Logger.log('Dates corrected on ' + fixed + ' leads');
+  });
+}
+
 function assignWaiting_() {
   var leads = readLeads_().filter(function (l) { return l.outcome === 'Open' && !l.ownerId && l.group === 'NBD'; });
   if (!leads.length) return;
