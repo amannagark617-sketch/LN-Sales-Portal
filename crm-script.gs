@@ -12,6 +12,7 @@ var LEAD_COLS = ['enquiryNo', 'createdAt', 'channel', 'sourceRef', 'source', 'gr
   'utmMedium', 'utmCampaign', 'addedBy', 'ownerId', 'ownerName', 'ownerTeam', 'nbdId', 'nbdName', 'stage', 'outcome',
   'reason', 'nextFollowUp', 'meetingDate', 'meetingTime', 'opf', 'orderValue', 'updatedAt', 'salesId', 'salesName'];
 var TL_COLS = ['time', 'enquiryNo', 'byId', 'byName', 'type', 'text', 'nextFollowUp', 'fromName', 'toName'];
+var QUOTE_COLS = ['enquiryNo', 'quoteNo', 'docType', 'brand', 'amount', 'linkedQuote', 'byId', 'byName', 'date'];
 var PA_COLS = ['enquiryNo', 'step', 'owner', 'planned', 'actual', 'delayMinutes'];
 var LISTS = {
   Source: [
@@ -41,7 +42,7 @@ var STAGES = ['New', 'Not connected', 'Follow-up', '1st meeting', 'Send proposal
 var SALES_STAGES = ['1st meeting', 'Send proposal', 'Negotiation'];
 var OLD_STAGES = { 'Contacted': 'Follow-up', 'Valid': 'Follow-up', 'Meeting': '1st meeting', 'Proposal': 'Send proposal' };
 var LOG_TYPES = ['Call', 'Note', 'Follow-up', 'WhatsApp', 'Meeting', 'Telephonic', 'Client Visit', 'Showroom', 'Video Call'];
-var SCHEMA = '2';
+var SCHEMA = '3';
 
 function normStage_(s) { s = str_(s); return OLD_STAGES[s] || s; }
 
@@ -94,7 +95,7 @@ function setup() {
 
 function ensureTabs_() {
   var ss = SpreadsheetApp.getActive();
-  [['Leads', LEAD_COLS], ['Timeline', TL_COLS], ['PlannedActual', PA_COLS], ['Availability', ['id', 'present', 'updatedAt']], ['CityMap', ['city', 'state']]]
+  [['Leads', LEAD_COLS], ['Timeline', TL_COLS], ['PlannedActual', PA_COLS], ['Quotes', QUOTE_COLS], ['Availability', ['id', 'present', 'updatedAt']], ['CityMap', ['city', 'state']]]
     .forEach(function (d) {
       var sh = ss.getSheetByName(d[0]) || ss.insertSheet(d[0]);
       if (sh.getMaxColumns() < d[1].length) sh.insertColumnsAfter(sh.getMaxColumns(), d[1].length - sh.getMaxColumns());
@@ -524,6 +525,7 @@ function handle_(b) {
           case 'send-back': return actionSendBack_(b, team);
           case 'reassign': return actionReassign_(b, team);
           case 'close-lead': return actionClose_(b);
+          case 'link-quote': return actionLinkQuote_(b);
           default: fail_('Unknown action');
         }
       });
@@ -539,8 +541,35 @@ function findLead_(enq) {
 function actionList_() {
   var cutoff = Utilities.formatDate(new Date(Date.now() - 90 * 86400000), tz_(), 'yyyy-MM-dd HH:mm:ss');
   var leads = readLeads_().filter(function (l) { return l.outcome === 'Open' || l.updatedAt >= cutoff; }).map(publicLead_);
-  return { ok: true, leads: leads, availability: availability_(), lists: readLists_(), now: now_() };
+  var keep = {}; leads.forEach(function (l) { keep[l.enquiryNo] = true; });
+  var quotes = readQuotes_().filter(function (q) { return keep[q.enquiryNo]; });
+  return { ok: true, leads: leads, quotes: quotes, availability: availability_(), lists: readLists_(), now: now_() };
 }
+function readQuotes_() {
+  var sh = tab_('Quotes'), n = sh ? sh.getLastRow() : 0;
+  if (n < 2) return [];
+  var from = Math.max(2, n - 1999);
+  return sh.getRange(from, 1, n - from + 1, QUOTE_COLS.length).getValues().map(function (row) {
+    var o = {}; QUOTE_COLS.forEach(function (c, j) { o[c] = str_(row[j]); });
+    return o;
+  });
+}
+
+function actionLinkQuote_(b) {
+  var enq = str_(b.enquiryNo), no = str_(b.quoteNo);
+  if (!enq || !no) fail_('Enquiry and quotation number are required');
+  var l = findLead_(enq);
+  var have = readQuotes_();
+  for (var i = 0; i < have.length; i++) if (have[i].quoteNo === no) return { ok: true, already: true };
+  var isPi = str_(b.docType) === 'PI';
+  var amount = Math.round(Number(b.amount) || 0);
+  appendRow_(tab_('Quotes'), [enq, no, isPi ? 'PI' : 'Quotation', str_(b.brand), amount, str_(b.linkedQuote), str_(b.byId), str_(b.byName), today_()]);
+  addTimeline_(enq, { id: b.byId, name: b.byName }, 'Quotation', (isPi ? 'Proforma invoice ' : 'Quotation ') + no + (str_(b.brand) ? ' (' + str_(b.brand) + ')' : '') + ', Rs. ' + amount.toLocaleString('en-IN'), '', '', '');
+  l.updatedAt = now_();
+  writeLead_(l);
+  return { ok: true };
+}
+
 function actionTimeline_(b) {
   var sh = tab_('Timeline'), n = sh.getLastRow(), out = [];
   if (n >= 2) {

@@ -12,6 +12,9 @@ import {
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { ItemPicker, ItemGroup } from './ItemPicker';
+import { fetchCrm } from '../crm/api';
+import type { Lead } from '../crm/constants';
+import { Combo } from '../crm/ui';
 
 const GOLD = '#9B7C50';
 const SPEC_PRESETS = ['Functionality', 'Dimensions (seat / arm)', 'Upholstery', 'Colour shade', 'Accessories', 'Cup holder', 'Switch', 'Side pocket / magazine holder', 'Head cushion', 'Wheels', 'IVR rod', 'AUX input', 'Concept', 'Metal finishing', 'Fire retardant', 'Logo / embroidery', 'Seat numbering', 'Motor make', 'Seating layout'];
@@ -138,7 +141,7 @@ const DiscountInput = ({ value, onChange }: { value: { mode: 'pct' | 'amt'; valu
   </div>
 );
 
-interface Props { salesperson: Salesperson }
+interface Props { salesperson: Salesperson; lead?: any; onLeadChange?: (l: any) => void }
 
 /** The stored logo can be 1600px wide, which made every PDF about 6 MB. 600px is plenty for a 50 mm logo. */
 const shrinkImage = (src: string, maxW = 600): Promise<string> => new Promise(resolve => {
@@ -156,7 +159,7 @@ const shrinkImage = (src: string, maxW = 600): Promise<string> => new Promise(re
   img.src = src;
 });
 
-export function QuotationWizard({ salesperson }: Props) {
+export function QuotationWizard({ salesperson, lead, onLeadChange }: Props) {
   const [tab, setTab] = useState<'build' | 'history'>('build');
   const [price, setPrice] = useState<PriceListPayload | null>(null);
   const [loadErr, setLoadErr] = useState('');
@@ -193,10 +196,26 @@ export function QuotationWizard({ salesperson }: Props) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachPolicy, setAttachPolicy] = useState(true);
   const [linkedQuotation, setLinkedQuotation] = useState('');
+  const [myLeads, setMyLeads] = useState<Lead[]>([]);
+  const [leadNo, setLeadNo] = useState('');
+  useEffect(() => {
+    fetchCrm().then(d => setMyLeads(d.leads.filter(l => l.outcome === 'Open'))).catch(() => setMyLeads([]));
+  }, []);
+  const useLead = (l: Lead | undefined | null) => {
+    if (!l) { setLeadNo(''); onLeadChange?.(null); return; }
+    setLeadNo(l.enquiryNo);
+    setClientName(`${l.firstName} ${l.lastName}`.trim()); setCompany(l.company || '');
+    setMobile(l.phone || ''); setEmail(l.email || '');
+    setBilling(b => b || [l.city, l.state].filter(Boolean).join(', '));
+    onLeadChange?.(l);
+  };
+  useEffect(() => {
+    if (lead && lead.enquiryNo !== leadNo) { useLead(lead); setSaved(null); setTab('build'); setStep(1); }
+  }, [lead]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState<{ number: string; docType: DocType } | null>(null);
+  const [saved, setSaved] = useState<{ number: string; docType: DocType; lead?: string; linkFailed?: boolean } | null>(null);
 
   const [history, setHistory] = useState<QuotationData[]>([]);
   const [histLoading, setHistLoading] = useState(false);
@@ -378,7 +397,7 @@ export function QuotationWizard({ salesperson }: Props) {
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
     setBilling(''); setShipping(''); setSite(''); setCustGstin(''); setInstallation(0); setAdvance(0); setShowBank(true); setAttachPolicy(true); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
-    setLinkedQuotation(''); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
+    setLinkedQuotation(''); setLeadNo(''); onLeadChange?.(null); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
   };
 
   const meta = (number: string): PdfMeta => ({
@@ -414,14 +433,14 @@ export function QuotationWizard({ salesperson }: Props) {
       const { quotationNumber } = await fetchNextNumber(brand, docType);
       const bytes = await buildBytes(quotationNumber);
       const full = company.trim() ? `${clientName.trim()} (${company.trim()})` : clientName.trim();
-      await saveQuotation({
-        quotationNumber, linkedQuotation: docType === 'PI' ? linkedQuotation : undefined, date: todayStr(),
+      const out = await saveQuotation({
+        quotationNumber, linkedQuotation: docType === 'PI' ? linkedQuotation : undefined, enquiryNo: leadNo || undefined, date: todayStr(),
         clientName: full, mobileNumber: mobile.trim(), emailId: email.trim(),
         billingAddress: billing.trim(), shippingAddress: (sameAddr ? billing : shipping).trim(),
         payload, pdfBase64: toBase64(bytes)
       });
       download(bytes, quotationNumber);
-      setSaved({ number: quotationNumber, docType });
+      setSaved({ number: quotationNumber, docType, lead: out.linkedLead || '', linkFailed: out.linkFailed });
     } catch (e: any) {
       setError(e.message || 'Saving failed.');
     } finally { setSaving(false); }
@@ -532,7 +551,8 @@ export function QuotationWizard({ salesperson }: Props) {
             <div className={`${card} text-center !py-10`}>
               <FileCheck className="mx-auto mb-3 text-emerald-700" size={36} />
               <h3 className="text-lg font-bold mb-1">{saved.docType === 'PI' ? 'Proforma Invoice' : 'Quotation'} {saved.number} saved</h3>
-              <p className="text-sm text-slate-600 mb-6">It is recorded in the sheet and the PDF has been downloaded.</p>
+              <p className="text-sm text-slate-600 mb-6">It is recorded in the sheet and the PDF has been downloaded.{saved.lead && <> It is linked to lead <b>{saved.lead}</b>.</>}</p>
+              {saved.linkFailed && <p className="text-sm text-amber-700 mb-6">It could not be linked to the lead right now. The quotation itself is saved.</p>}
               <div className="flex flex-wrap gap-3 justify-center">
                 {saved.docType === 'Quotation' && (
                   <button className={btnPrimary} onClick={() => { setDocType('PI'); setLinkedQuotation(saved.number); setSaved(null); setStep(4); }}>
@@ -618,6 +638,13 @@ export function QuotationWizard({ salesperson }: Props) {
 
               {step === 1 && (
                 <div className={`${card} grid sm:grid-cols-2 gap-4`}>
+                  {myLeads.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <label className={label}>Link to a lead <span className="font-normal text-slate-400">(optional, fills the details below)</span></label>
+                      <Combo value={leadNo} onChange={v => useLead(myLeads.find(l => l.enquiryNo === v))} placeholder="Search by name, phone or enquiry number" clearLabel="Not linked to a lead"
+                        options={myLeads.map(l => ({ value: l.enquiryNo, label: `${`${l.firstName} ${l.lastName}`.trim() || l.phone} · ${l.enquiryNo}${l.city ? ' · ' + l.city : ''}${l.phone ? ' · ' + l.phone : ''}` }))} />
+                    </div>
+                  )}
                   <div><label className={label}>Client name *</label><input className={field} value={clientName} onChange={e => setClientName(e.target.value)} autoFocus /></div>
                   <div><label className={label}>Company</label><input className={field} value={company} onChange={e => setCompany(e.target.value)} placeholder="Optional" /></div>
                   <div><label className={label}>Mobile *</label><input className={field} inputMode="tel" value={mobile} onChange={e => setMobile(e.target.value)} /></div>

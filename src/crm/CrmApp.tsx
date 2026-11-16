@@ -8,7 +8,7 @@ import { AddEnquiry } from './AddEnquiry';
 
 type Tab = 'today' | 'leads' | 'add';
 
-export function CrmApp() {
+export function CrmApp({ onQuote }: { onQuote?: (lead: Lead) => void }) {
   const [data, setData] = useState<CrmData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -188,7 +188,7 @@ export function CrmApp() {
           <div className={lead ? 'hidden md:block' : ''}>{tab === 'today' ? todayView : leadsView}</div>
           <div className={`${lead ? '' : 'hidden md:block'} md:sticky md:top-44 md:max-h-[calc(100vh-12rem)] md:overflow-y-auto md:rounded-xl`}>
             {lead
-              ? <LeadPanel lead={lead} data={data} onChanged={() => load(true)} onClose={() => setSelected(null)} />
+              ? <LeadPanel lead={lead} data={data} onChanged={() => load(true)} onClose={() => setSelected(null)} onQuote={onQuote} />
               : <div className="hidden md:block bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">Select a lead to see details and update it.</div>}
           </div>
         </div>

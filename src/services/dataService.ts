@@ -245,6 +245,7 @@ export const fetchNextNumber = async (brand: Brand, docType: DocType): Promise<{
 export interface SaveQuotationBody {
   quotationNumber: string;
   linkedQuotation?: string;
+  enquiryNo?: string;
   date: string;
   clientName: string;
   mobileNumber: string;
@@ -255,7 +256,7 @@ export interface SaveQuotationBody {
   pdfBase64?: string;
 }
 
-export const saveQuotation = async (body: SaveQuotationBody): Promise<{ status: string; quotationNumber: string; totals: Totals }> => {
+export const saveQuotation = async (body: SaveQuotationBody): Promise<{ status: string; quotationNumber: string; totals: Totals; linkedLead?: string; linkFailed?: boolean }> => {
   const response = await fetch('/api/quotations', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body) });
   if (!response.ok) {
     let msg = 'Saving failed';

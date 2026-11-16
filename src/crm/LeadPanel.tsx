@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, Phone, MessageCircle, Mail } from 'lucide-react';
+import { ChevronLeft, Phone, MessageCircle, Mail, FileText } from 'lucide-react';
 import { crmAction, fetchTimeline, CrmData } from './api';
 import { Lead, TimelineEntry, SALES_STAGES, MEETING_TYPES, normStage, nextSalesStage, plannedOf, isOverdue, stepLabel } from './constants';
 import { Field, Combo, opts, inputCls, areaCls, btnPrimary, btnGhost, DateField, Tag, KindTag, fullName, shortDate, todayStr } from './ui';
@@ -42,8 +42,9 @@ function when(t: string): string {
   return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void }) {
+export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void; onQuote?: (lead: Lead) => void }) {
   const me = data.me;
+  const quotes = (data.quotes || []).filter(q => q.enquiryNo === lead.enquiryNo).sort((a, b) => b.date.localeCompare(a.date));
   const [panel, setPanel] = useState<null | 'update' | 'reopen' | 'reassign'>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -166,6 +167,29 @@ export function LeadPanel({ lead, data, onChanged, onClose }: { lead: Lead; data
         <a href={`https://wa.me/91${digits}`} target="_blank" rel="noreferrer" className={btnGhost}><MessageCircle size={16} /> WhatsApp</a>
         {lead.email ? <a href={`mailto:${lead.email}`} className={btnGhost}><Mail size={16} /> Email</a> : <span />}
       </div>
+
+      {(onQuote || quotes.length > 0) && (
+        <div className="px-4 py-3 border-b border-slate-100">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-bold text-slate-800">Quotations{quotes.length > 0 && <span className="ml-1.5 text-xs font-normal text-slate-500">{quotes.length}</span>}</div>
+            {onQuote && open && <button onClick={() => onQuote(lead)} className="h-10 px-4 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 inline-flex items-center gap-2"><FileText size={16} /> Create quotation</button>}
+          </div>
+          {quotes.length > 0 ? (
+            <ul className="mt-2 divide-y divide-slate-100">
+              {quotes.map(q => (
+                <li key={q.quoteNo} className="py-2 flex items-center justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-900">{q.quoteNo}</span>
+                    <span className="ml-2 text-xs text-slate-500">{q.docType === 'PI' ? 'Proforma invoice' : 'Quotation'} · {q.brand}</span>
+                    <div className="text-xs text-slate-500">{shortDate(q.date)}{q.byName ? ` · ${q.byName}` : ''}</div>
+                  </div>
+                  <div className="font-bold text-slate-900 shrink-0">Rs. {Number(q.amount || 0).toLocaleString('en-IN')}</div>
+                </li>
+              ))}
+            </ul>
+          ) : <div className="mt-1 text-xs text-slate-500">No quotation made for this lead yet.</div>}
+        </div>
+      )}
 
       {open && (
         <div className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${overdue ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>

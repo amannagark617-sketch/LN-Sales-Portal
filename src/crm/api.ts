@@ -7,8 +7,10 @@ export interface CrmLists {
   Segment: string[]; Title: string[]; Designation: string[]; Requirement: string[]; Zone: string[]; State: string[];
   LostReason: string[]; InvalidReason: string[];
 }
+export interface CrmQuote { enquiryNo: string; quoteNo: string; docType: 'Quotation' | 'PI'; brand: string; amount: string; linkedQuote: string; byName: string; date: string; }
 export interface CrmData {
   leads: Lead[];
+  quotes?: CrmQuote[];
   me: CrmMe;
   sales: { id: string; name: string; showroom: string; region: string }[];
   nbd: { id: string; name: string; present: boolean }[];

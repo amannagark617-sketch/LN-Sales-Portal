@@ -1284,6 +1284,26 @@ async function startServer() {
         if (existingPi) return res.status(409).json({ error: `This quotation was already converted to ${existingPi.quotationNumber}.` });
       }
 
+      // 3b. Optional link to a CRM lead (a PI inherits the lead of its quotation)
+      let enquiryNo = String(body.enquiryNo || '').trim();
+      let leadCheck: 'none' | 'ok' | 'skipped' = 'none';
+      try {
+        if ((enquiryNo || docType === 'PI') && process.env.CRM_SCRIPT_URL && process.env.CRM_SCRIPT_KEY && canUseCrm(currentUser)) {
+          const crm = await getCrmData(true);
+          if (!enquiryNo && docType === 'PI') enquiryNo = ((crm.quotes || []).find((q: any) => String(q.quoteNo).toLowerCase() === linkedQuotation.toLowerCase()) || {}).enquiryNo || '';
+          if (enquiryNo) {
+            const all = await getCachedSalespersons();
+            if (!crmScope(currentUser, crm.leads, all).some((l: any) => l.enquiryNo === enquiryNo)) {
+              return res.status(403).json({ error: 'That lead is not yours, so the quotation cannot be linked to it.' });
+            }
+            leadCheck = 'ok';
+          }
+        } else if (enquiryNo) leadCheck = 'skipped';
+      } catch (e: any) {
+        console.error('Quotation lead check failed:', e.message);
+        if (enquiryNo) leadCheck = 'skipped';
+      }
+
       // 4. Totals are always recalculated here; the browser's totals are ignored
       const totals = calcTotals(payload);
       const edited = payloadHasEditedPrices(payload);
@@ -1332,7 +1352,18 @@ async function startServer() {
         return res.status(502).json({ error: result?.message || 'The sheet did not accept the record.' });
       }
 
-      res.json({ status: 'success', quotationNumber, docType, totals, customPricing: edited });
+      let linked = '';
+      if (enquiryNo && leadCheck === 'ok') {
+        try {
+          await callCrm({ action: 'link-quote', enquiryNo, quoteNo: quotationNumber, docType, brand, amount: totals.grandTotal, linkedQuote: linkedQuotation, byId: currentUser.id, byName: currentUser.name });
+          crmCache = null;
+          linked = enquiryNo;
+        } catch (e: any) {
+          console.error(`Could not link ${quotationNumber} to ${enquiryNo}:`, e.message);
+        }
+      }
+
+      res.json({ status: 'success', quotationNumber, docType, totals, customPricing: edited, linkedLead: linked, linkFailed: !!enquiryNo && !linked });
 
       // Optional: upload the PDF to Drive in the background (same as before)
       if (body.pdfBase64) {
@@ -1577,8 +1608,11 @@ async function startServer() {
       if (!canUseCrm(u)) return res.status(403).json({ error: 'The CRM is not available for your role.' });
       const [data, all] = await Promise.all([getCrmData(req.query.refresh === '1'), getCachedSalespersons()]);
       const active = all.filter((s: any) => s.active !== false);
+      const scoped = crmScope(u, data.leads, all);
+      const seen = new Set(scoped.map((l: any) => l.enquiryNo));
       res.json({
-        leads: crmScope(u, data.leads, all),
+        leads: scoped,
+        quotes: (data.quotes || []).filter((q: any) => seen.has(q.enquiryNo)),
         me: { id: u.id, name: u.name, team: crmTeam(u), isManager: !!u.isManager, admin: isCrmAdmin(u) },
         sales: active.filter((s: any) => s.team === 'Sales').map((s: any) => ({ id: s.id, name: s.name, showroom: s.showroom, region: s.region })),
         nbd: active.filter((s: any) => s.team === 'NBD').map((s: any) => ({ id: s.id, name: s.name, present: data.availability?.[s.id] !== false })),
