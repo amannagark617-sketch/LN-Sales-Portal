@@ -492,7 +492,7 @@ function repairOnlineDates() {
 }
 
 function assignWaiting_() {
-  var leads = readLeads_().filter(function (l) { return l.outcome === 'Open' && !l.ownerId && l.group === 'NBD'; });
+  var leads = readLeads_().filter(function (l) { return l.outcome === 'Open' && !l.ownerId && l.group === 'NBD' && l.channel !== 'Imported'; });
   if (!leads.length) return;
   var team = readTeam_();
   leads.sort(function (a, b) { return a.createdAt < b.createdAt ? -1 : 1; });
@@ -881,5 +881,289 @@ function importOpenLeads() {
       existing[enq] = true;
       set('Imported');
     });
+  });
+}
+
+var FMS_SHEET_IDS = ['1MChhRpBr6pNe1zolhuIuMsPJ7DRrx_qG0RD24oqYQCI'];
+var FMS_FIRST_ROW = 8;
+var FMS_SOURCE_NAME = { 'walk in': 'Walk-In', 'what hi-fi2022': 'What Hi-Fi' };
+var FMS_COLS = {
+  at: 'A', key: 'B', name: 'C', salesman: 'D', phone: 'E', email: 'F', city: 'G', zone: 'H', source: 'I', message: 'K', manual: 'L',
+  callDone: 'N', callStatus: 'O', valid: 'P', callRemarks: 'R', requirement: 'S',
+  fuPlan: 'U', fuAct: 'V', fuStatus: 'W', assigned: 'X', meetType: 'Y', meetDate: 'Z', meetTime: 'AA',
+  mtgAct: 'AE', mtgStatus: 'AF', mtgRemarks: 'AG', propDate: 'AH', propAct: 'AJ', propStatus: 'AK', propRemarks: 'AL', propValue: 'AN', nextProp: 'AO', nextSc: 'AP',
+  n1Act: 'AS', n1Status: 'AT', n1Remarks: 'AU', n2Status: 'BB', n2Remarks: 'BC', nextN2: 'AW', n2Date: 'AX', n2Time: 'AY', n2Act: 'BA',
+  final: 'BD', orderValue: 'BE', opf: 'BG', modified: 'BH', nextN3: 'BJ', n3Act: 'BM', n3Status: 'BN', n3Remarks: 'BO',
+  nextN4: 'BQ', n4Date: 'BR', n4Time: 'BS', n4Act: 'BU', n4Status: 'BV', n4Remarks: 'BW'
+};
+
+function colIndex_(letters) {
+  var n = 0;
+  for (var i = 0; i < letters.length; i++) n = n * 26 + letters.charCodeAt(i) - 64;
+  return n - 1;
+}
+
+function parseFmsDate_(v) {
+  var s = str_(v);
+  if (!s) return null;
+  var m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+  var y, mo, d, hh = '00', mi = '00', ss = '00';
+  if (m) {
+    d = m[1]; mo = m[2]; y = m[3];
+    if (m[4]) { hh = m[4]; mi = m[5]; ss = m[6] || '00'; }
+  } else {
+    m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+    if (!m) return null;
+    mo = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }[m[2].toLowerCase()];
+    if (!mo) return null;
+    d = m[1]; y = m[3];
+    if (m[4]) { hh = m[4]; mi = m[5]; ss = m[6] || '00'; }
+  }
+  if (String(y).length === 2) y = '20' + y;
+  var p = function (x) { return ('0' + x).slice(-2); };
+  var date = y + '-' + p(mo) + '-' + p(d);
+  if (Number(mo) < 1 || Number(mo) > 12 || Number(d) < 1 || Number(d) > 31) return null;
+  return { date: date, time: p(hh) + ':' + mi + ':' + ss, full: date + ' ' + p(hh) + ':' + mi + ':' + ss };
+}
+
+function fmsPeople_(team) {
+  var list = team.filter(function (m) { return m.team === 'NBD' || m.team === 'Sales'; });
+  var norm = function (s) { return str_(s).toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim(); };
+  return {
+    find: function (name, wantTeam) {
+      var n = norm(name);
+      if (!n || n === 'me' || n === 'sales coordinator') return null;
+      var pool = list.filter(function (m) { return !wantTeam || m.team === wantTeam; });
+      var exact = pool.filter(function (m) { return norm(m.name) === n; });
+      if (exact.length === 1) return exact[0];
+      var first = n.split(' ')[0];
+      var hits = pool.filter(function (m) { return norm(m.name).split(' ')[0] === first; });
+      return hits.length === 1 ? hits[0] : null;
+    }
+  };
+}
+
+function fmsStage_(g) {
+  if (g('n4Status') || g('n3Status') || g('n2Status') || g('n1Status') || g('n4Remarks') || g('n3Remarks') || g('n2Remarks') || g('n1Remarks')) return 'Negotiation';
+  if (g('propStatus') || g('propAct') || g('propRemarks')) return 'Send proposal';
+  if (g('mtgStatus') || g('mtgAct') || g('mtgRemarks') || (g('assigned') && g('meetDate'))) return '1st meeting';
+  if (g('fuStatus') || g('fuAct')) return 'Follow-up';
+  if (/^not/i.test(g('callStatus'))) return 'Not connected';
+  if (g('callStatus')) return 'Follow-up';
+  return 'New';
+}
+
+function fmsLead_(g, ctx) {
+  var enq = g('key');
+  var created = parseFmsDate_(g('at'));
+  var name = g('name') || 'Unknown';
+  var sp = name.indexOf(' ');
+  var digits = g('phone').replace(/\D/g, '');
+  var manual = g('manual').replace(/\D/g, '');
+  var phone = digits.length >= 10 ? digits.slice(-10) : (manual.length >= 10 ? manual.slice(-10) : digits);
+  var rawSource = g('source');
+  var source = FMS_SOURCE_NAME[rawSource.toLowerCase()] || rawSource;
+  var group = 'Direct';
+  for (var i = 0; i < ctx.sources.length; i++) if (ctx.sources[i].name.toLowerCase() === source.toLowerCase()) { group = ctx.sources[i].group; source = ctx.sources[i].name; break; }
+  var finalStatus = g('final').toLowerCase();
+  var outcome = 'Open';
+  if (finalStatus === 'lost') outcome = 'Lost';
+  else if (finalStatus === 'invalid') outcome = 'Invalid';
+  else if (finalStatus === 'closed') outcome = 'Closed';
+  else if (!finalStatus && /^invalid/i.test(g('valid'))) outcome = 'Invalid';
+  var stage = fmsStage_(g);
+  var lastRemark = g('n4Remarks') || g('n3Remarks') || g('n2Remarks') || g('n1Remarks') || g('propRemarks') || g('mtgRemarks') || g('callRemarks');
+  var loc = matchLocation_(g('city'), ctx.cityMap);
+  var meetingDate = '', meetingTime = '';
+  var next = '';
+  var later = stage === '1st meeting' || stage === 'Send proposal' || stage === 'Negotiation';
+  var nameFor = g('assigned') || g('salesman');
+  var person = later ? ctx.people.find(nameFor, 'Sales') : (ctx.people.find(g('salesman'), 'NBD') || null);
+  if (!person && later && g('salesman')) person = ctx.people.find(g('salesman'), 'Sales');
+  var d;
+  if (stage === 'Negotiation') {
+    d = parseFmsDate_(g('nextN4') || g('nextN3') || g('nextN2') || g('nextSc'));
+    var md = parseFmsDate_(g('n4Date') || g('n2Date'));
+    if (md) { meetingDate = md.date; meetingTime = /^\d{1,2}:\d{2}/.test(g('n4Time') || g('n2Time')) ? (g('n4Time') || g('n2Time')) : ''; }
+  } else if (stage === 'Send proposal') {
+    d = parseFmsDate_(g('nextProp') || g('nextSc'));
+  } else if (stage === '1st meeting') {
+    d = parseFmsDate_(g('meetDate')) || parseFmsDate_(g('nextSc'));
+    var m1 = parseFmsDate_(g('meetDate'));
+    if (m1) { meetingDate = m1.date; meetingTime = /^\d{1,2}:\d{2}/.test(g('meetTime')) ? g('meetTime') : ''; }
+  } else if (stage === 'Follow-up') {
+    d = parseFmsDate_(g('fuPlan'));
+  }
+  next = d ? d.date : '';
+  var today = today_();
+  if (outcome === 'Open' && !next) next = today;
+  var modified = parseFmsDate_(g('modified'));
+  var money = function (v) { return String(v || '').replace(/[^0-9.]/g, ''); };
+  var notes = [];
+  if (g('message')) notes.push(g('message'));
+  if (nameFor && !person) notes.push('Salesperson in the old sheet: ' + nameFor);
+  var lead = {
+    enquiryNo: enq, createdAt: created ? created.full : now_(), channel: 'Imported', sourceRef: 'FMS', source: source, group: group,
+    segment: '', title: '', firstName: sp > 0 ? name.slice(0, sp) : name, lastName: sp > 0 ? name.slice(sp + 1) : '', company: '', designation: '',
+    phone: phone, phoneKey: phoneKey_(phone), email: g('email'), city: g('city'), state: loc.state, zone: loc.zone || g('zone'),
+    requirement: (g('requirement') || g('message')).slice(0, 80), quantity: '', notes: notes.join(' | ').slice(0, 1000), utmMedium: '', utmCampaign: '',
+    addedBy: 'Import', ownerId: '', ownerName: '', ownerTeam: '', nbdId: '', nbdName: '', stage: stage, outcome: outcome,
+    reason: outcome === 'Lost' || outcome === 'Invalid' ? lastRemark.slice(0, 300) : '', nextFollowUp: outcome === 'Open' ? next : '',
+    meetingDate: meetingDate, meetingTime: meetingTime, opf: '', orderValue: '', updatedAt: modified ? modified.full : (created ? created.full : now_()),
+    salesId: '', salesName: '', altPhone: manual.length >= 10 && manual.slice(-10) !== phone ? manual.slice(-10) : ''
+  };
+  if (outcome === 'Closed') { lead.stage = 'Converted'; lead.opf = g('opf'); lead.orderValue = money(g('orderValue') || g('propValue')); }
+  var unmatched = '';
+  if (person && (outcome !== 'Open' || person.active)) {
+    setOwner_(lead, person);
+    if (person.team === 'Sales') { lead.salesId = person.id; lead.salesName = person.name; }
+  } else if (nameFor && outcome === 'Open' && later) {
+    unmatched = nameFor;
+  }
+  return { lead: lead, unmatched: unmatched };
+}
+
+function fmsTimelineFromRow_(g, enq) {
+  var steps = [
+    ['First call', 'callDone', 'callStatus', 'callRemarks'], ['1st meeting', 'mtgAct', 'mtgStatus', 'mtgRemarks'],
+    ['Send proposal', 'propAct', 'propStatus', 'propRemarks'], ['Negotiation 1', 'n1Act', 'n1Status', 'n1Remarks'],
+    ['Negotiation 2', 'n2Act', 'n2Status', 'n2Remarks'], ['Negotiation 3', 'n3Act', 'n3Status', 'n3Remarks'], ['Negotiation 4', 'n4Act', 'n4Status', 'n4Remarks']
+  ];
+  var out = [];
+  steps.forEach(function (s) {
+    var remark = g(s[3]);
+    if (!remark) return;
+    var t = parseFmsDate_(g(s[1]));
+    out.push([t ? t.full : now_(), enq, '', 'Old Sales Engine', 'Note', ('[' + s[0] + (g(s[2]) ? ' · ' + g(s[2]) : '') + '] ' + remark).slice(0, 3000), '', '', '']);
+  });
+  return out;
+}
+
+function fmsReadSheet_(id) {
+  var ss = SpreadsheetApp.openById(id);
+  var fms = ss.getSheetByName('FMS');
+  if (!fms) throw new Error('No FMS tab in ' + id);
+  var head = fms.getRange(7, 1, 1, colIndex_('BD') + 1).getDisplayValues()[0];
+  if (str_(head[colIndex_('B')]).toLowerCase() !== 'primary key' || !/^current status/i.test(str_(head[colIndex_('BD')]))) throw new Error('FMS header row 7 does not match the expected layout in ' + id);
+  var n = fms.getLastRow() - FMS_FIRST_ROW + 1;
+  var vals = n > 0 ? fms.getRange(FMS_FIRST_ROW, 1, n, colIndex_('CD') + 1).getDisplayValues() : [];
+  var history = {};
+  var sp = ss.getSheetByName('SP RP All');
+  if (sp && sp.getLastRow() > 1) {
+    sp.getRange(2, 1, sp.getLastRow() - 1, 9).getDisplayValues().forEach(function (r) {
+      var e = str_(r[3]);
+      if (!e) return;
+      var t = parseFmsDate_(r[2]);
+      var text = '[' + str_(r[1]) + (str_(r[4]) ? ' · ' + str_(r[4]) : '') + '] ' + str_(r[5]);
+      (history[e] = history[e] || []).push([t ? t.full : '', e, '', 'Old Sales Engine', 'Note', text.slice(0, 3000), '', '', '']);
+    });
+  }
+  return { rows: vals, history: history };
+}
+
+function fmsIds_() {
+  var p = PropertiesService.getScriptProperties().getProperty('FMS_SHEET_IDS');
+  return p ? p.split(',').map(function (x) { return x.trim(); }).filter(Boolean) : FMS_SHEET_IDS;
+}
+
+function fmsContext_() {
+  var team = readTeam_();
+  return { team: team, people: fmsPeople_(team), cityMap: loadCityMap_(), sources: readLists_().Source };
+}
+
+function fmsGetter_(row) {
+  return function (k) { var i = colIndex_(FMS_COLS[k]); return i < row.length ? str_(row[i]) : ''; };
+}
+
+function previewFms() {
+  var ctx = fmsContext_();
+  var ids = fmsIds_();
+  var ss = SpreadsheetApp.getActive();
+  var stat = { outcome: {}, stage: {}, openStage: {}, unmatched: {}, noPhone: 0, total: 0, already: 0 };
+  var existing = {};
+  readLeads_().forEach(function (l) { existing[l.enquiryNo] = true; });
+  var sample = [], per = { Open: 0, Closed: 0, Lost: 0, Invalid: 0 };
+  ids.forEach(function (id) {
+    var src = fmsReadSheet_(id);
+    src.rows.forEach(function (row) {
+      var g = fmsGetter_(row);
+      if (!g('key')) return;
+      var r = fmsLead_(g, ctx), l = r.lead;
+      stat.total++;
+      if (existing[l.enquiryNo]) stat.already++;
+      stat.outcome[l.outcome] = (stat.outcome[l.outcome] || 0) + 1;
+      stat.stage[l.stage] = (stat.stage[l.stage] || 0) + 1;
+      if (l.outcome === 'Open') stat.openStage[l.stage] = (stat.openStage[l.stage] || 0) + 1;
+      if (l.phoneKey.length < 10) stat.noPhone++;
+      if (r.unmatched) stat.unmatched[r.unmatched] = (stat.unmatched[r.unmatched] || 0) + 1;
+      if (per[l.outcome] < (l.outcome === 'Open' ? 10 : 4) && (src.history[l.enquiryNo] || fmsTimelineFromRow_(g, l.enquiryNo)).length) {
+        per[l.outcome]++;
+        sample.push([l.enquiryNo, l.firstName + ' ' + l.lastName, l.phone, l.city, l.state, l.source, l.group, l.stage, l.outcome, l.ownerName, l.nextFollowUp, l.meetingDate, l.createdAt, l.opf, l.orderValue, l.reason, (src.history[l.enquiryNo] || fmsTimelineFromRow_(g, l.enquiryNo)).length]);
+      }
+    });
+  });
+  var sh = ss.getSheetByName('Import Preview') || ss.insertSheet('Import Preview');
+  sh.clear();
+  var head = ['Enquiry No', 'Name', 'Phone', 'City', 'State', 'Source', 'Group', 'Stage', 'Outcome', 'Owner', 'Next follow-up', 'Meeting date', 'Created', 'OPF', 'Order value', 'Reason', 'Timeline notes'];
+  sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
+  if (sample.length) sh.getRange(2, 1, sample.length, head.length).setValues(sample);
+  var line = function (o) { return Object.keys(o).sort().map(function (k) { return k + ': ' + o[k]; }).join(', '); };
+  var rep = [
+    ['Leads in the old sheets', stat.total], ['Already in the CRM', stat.already], ['By outcome', line(stat.outcome)], ['Open leads by step', line(stat.openStage)],
+    ['Without a 10 digit phone', stat.noPhone], ['Open leads whose salesperson is not in the portal (will wait unassigned)', line(stat.unmatched)]
+  ];
+  var rs = ss.getSheetByName('Import Report') || ss.insertSheet('Import Report');
+  rs.clear();
+  rs.getRange(1, 1, rep.length, 2).setValues(rep);
+  rs.getRange(1, 1, rep.length, 1).setFontWeight('bold');
+  rs.setColumnWidth(1, 420); rs.setColumnWidth(2, 700);
+  Logger.log(JSON.stringify(stat));
+}
+
+function appendBatch_(sh, rows) {
+  if (!rows.length) return;
+  var width = rows[0].length, start = sh.getLastRow() + 1, need = start + rows.length - 1;
+  if (need > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows() + 500);
+  var rng = sh.getRange(start, 1, rows.length, width);
+  rng.setNumberFormat('@');
+  rng.setValues(rows);
+}
+
+function importFms() {
+  withLock_(function () {
+    var started = Date.now();
+    var ctx = fmsContext_();
+    var existing = {};
+    readLeads_().forEach(function (l) { existing[l.enquiryNo] = true; });
+    var leadSh = tab_('Leads'), tlSh = tab_('Timeline'), paSh = tab_('PlannedActual');
+    var done = 0, skipped = 0, waiting = 0, stopped = false;
+    fmsIds_().forEach(function (id) {
+      if (stopped) return;
+      var src = fmsReadSheet_(id);
+      var leadRows = [], tlRows = [], paRows = [];
+      var flush = function () {
+        appendBatch_(leadSh, leadRows); appendBatch_(tlSh, tlRows); appendBatch_(paSh, paRows);
+        leadRows = []; tlRows = []; paRows = [];
+      };
+      for (var i = 0; i < src.rows.length; i++) {
+        var g = fmsGetter_(src.rows[i]);
+        if (!g('key')) continue;
+        if (existing[g('key')]) { skipped++; continue; }
+        if (Date.now() - started > 270000) { stopped = true; break; }
+        var r = fmsLead_(g, ctx), l = r.lead;
+        leadRows.push(LEAD_COLS.map(function (c) { return l[c] === undefined ? '' : l[c]; }));
+        var hist = src.history[l.enquiryNo] || fmsTimelineFromRow_(g, l.enquiryNo);
+        hist.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+        hist.forEach(function (h) { if (!h[0]) h[0] = l.createdAt; tlRows.push(h); });
+        tlRows.push([now_(), l.enquiryNo, '', 'Import', 'Imported', 'Brought in from the old Sales Engine', l.nextFollowUp, '', l.ownerName]);
+        if (l.outcome === 'Open' && l.ownerId) paRows.push([l.enquiryNo, l.stage === 'New' ? 'First call' : l.stage, l.ownerName, l.nextFollowUp, '', '']);
+        if (l.outcome === 'Open' && !l.ownerId) waiting++;
+        existing[l.enquiryNo] = true;
+        done++;
+        if (leadRows.length >= 250) flush();
+      }
+      flush();
+    });
+    Logger.log('Imported ' + done + ', skipped ' + skipped + ' already in the CRM, open without owner ' + waiting + (stopped ? '. Time ran out: run importFms again to continue.' : '. Finished.'));
   });
 }
