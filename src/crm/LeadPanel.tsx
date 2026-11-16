@@ -46,16 +46,18 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
   const me = data.me;
   const iOwn = lead.ownerId === me.id;
   const quotes = (data.quotes || []).filter(q => q.enquiryNo === lead.enquiryNo).sort((a, b) => b.date.localeCompare(a.date));
-  const [panel, setPanel] = useState<null | 'update' | 'reopen' | 'reassign'>(null);
+  const [panel, setPanel] = useState<null | 'update' | 'reopen' | 'reassign' | 'edit'>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const blank = { conn: '' as '' | 'Connected' | 'Not connected', sub: '' as '' | 'Valid' | 'Invalid' | 'Call again', status: '' as Status | '', assign: 'Myself', mtype: '', text: '', next: '', toId: '', date: '', time: '', reason: '', opf: '', value: '' };
   const [f, setF] = useState(blank);
+  const contactOf = () => ({ firstName: lead.firstName, lastName: lead.lastName, phone: lead.phone, altPhone: lead.altPhone || '' });
+  const [ec, setEc] = useState(contactOf());
   const set = (k: keyof typeof blank, v: any) => setF(p => ({ ...p, [k]: v }));
 
   const loadTimeline = () => fetchTimeline(lead.enquiryNo).then(setTimeline).catch(() => setTimeline([]));
-  useEffect(() => { setPanel(null); setError(''); setTimeline(null); setF(blank); loadTimeline(); }, [lead.enquiryNo]);
+  useEffect(() => { setPanel(null); setError(''); setTimeline(null); setF(blank); setEc(contactOf()); loadTimeline(); }, [lead.enquiryNo]);
 
   const stage = normStage(lead.stage);
   const isOwner = lead.ownerId === me.id;
@@ -66,6 +68,7 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
   const ctx: 'call' | 'nbd' | 'sales' = lead.ownerTeam === 'Sales' ? 'sales' : (stage === 'New' || stage === 'Not connected') ? 'call' : 'nbd';
   const canAlign = lead.ownerTeam === 'NBD' && (isOwner || me.admin);
   const canBack = lead.ownerTeam === 'Sales' && (isOwner || me.admin) && (stage === 'Send proposal' || stage === 'Negotiation');
+  const canEditContact = isMine || boss;
   const canReopen = !open && lead.outcome !== 'Closed' && (isMine || boss);
   const planned = plannedOf(lead);
   const overdue = isOverdue(lead);
@@ -289,7 +292,7 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
         </div>
       )}
 
-      {error && panel !== 'update' && <div className="mx-4 md:mx-5 mt-3 rounded-md border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+      {error && panel !== 'update' && panel !== 'edit' && <div className="mx-4 md:mx-5 mt-3 rounded-md border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
 
       <div className={`${sec} @container`}>
         <div className={`grid gap-2 ${lead.email ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]' : 'grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]'}`}>
@@ -320,13 +323,32 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
       )}
 
       <div className={sec}>
-        <h3 className={`${h3} mb-3`}>Details</h3>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className={h3}>Details</h3>
+          {canEditContact && <button className="text-xs font-bold text-slate-600 underline" onClick={() => { setEc(contactOf()); setPanel(panel === 'edit' ? null : 'edit'); setError(''); }}>{panel === 'edit' ? 'Cancel' : 'Edit name or phone'}</button>}
+        </div>
+        {canEditContact && panel === 'edit' && (
+          <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="First name" required><input className={inputCls} value={ec.firstName} onChange={e => setEc(p => ({ ...p, firstName: e.target.value }))} /></Field>
+              <Field label="Last name"><input className={inputCls} value={ec.lastName} onChange={e => setEc(p => ({ ...p, lastName: e.target.value }))} /></Field>
+            </div>
+            <Field label="Phone" required><input className={inputCls} inputMode="tel" value={ec.phone} onChange={e => setEc(p => ({ ...p, phone: e.target.value }))} /></Field>
+            <Field label="Other numbers" hint="Separate with a comma if there is more than one."><input className={inputCls} inputMode="tel" value={ec.altPhone} onChange={e => setEc(p => ({ ...p, altPhone: e.target.value }))} /></Field>
+            {error && <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+            <button className={`${btnPrimary} w-full`} disabled={busy} onClick={() => {
+              if (!need(ec.firstName.trim(), 'Enter the customer name') || !need(ec.phone.replace(/\D/g, '').length >= 10, 'Enter a 10 digit phone number')) return;
+              run({ action: 'edit-contact', ...ec });
+            }}>{busy ? 'Saving…' : 'Save changes'}</button>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <Info label="Requirement" value={lead.requirement} />
           <Info label="Quantity" value={lead.quantity} />
           <Info label="City" value={[lead.city, lead.state].filter(Boolean).join(', ')} />
           <Info label="Zone" value={lead.zone} />
           <Info label="Phone" value={lead.phone} />
+          <Info label="Other numbers" value={lead.altPhone} />
           <Info label="Email" value={lead.email} />
           <Info label="Meeting" value={lead.meetingDate ? `${shortDate(lead.meetingDate)} ${lead.meetingTime}`.trim() : ''} />
           <Info label="Segment" value={lead.segment} />

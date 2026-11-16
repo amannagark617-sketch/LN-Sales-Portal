@@ -1728,12 +1728,16 @@ async function startServer() {
         case 'reassign':
           if (!isBoss) return res.status(403).json({ error: 'Only a manager can reassign.' });
           break;
+        case 'edit-contact':
+          if (!isMine && !isBoss) return res.status(403).json({ error: 'This lead is not with you.' });
+          break;
         default:
           return res.status(400).json({ error: 'Unknown action.' });
       }
       const out = await callCrm({
         action: b.action, ...by, enquiryNo: lead.enquiryNo, type: b.type, text: b.text, stage: b.stage,
         nextFollowUp: b.nextFollowUp, reason: b.reason, toId: b.toId, meetingDate: b.meetingDate, meetingTime: b.meetingTime, opf: b.opf, orderValue: b.orderValue,
+        firstName: b.firstName, lastName: b.lastName, phone: b.phone, altPhone: b.altPhone,
       });
       crmCache = null;
       res.json(out);

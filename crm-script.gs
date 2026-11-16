@@ -10,7 +10,7 @@ var MAX_PER_RUN = 60;
 var LEAD_COLS = ['enquiryNo', 'createdAt', 'channel', 'sourceRef', 'source', 'group', 'segment', 'title', 'firstName', 'lastName',
   'company', 'designation', 'phone', 'phoneKey', 'email', 'city', 'state', 'zone', 'requirement', 'quantity', 'notes',
   'utmMedium', 'utmCampaign', 'addedBy', 'ownerId', 'ownerName', 'ownerTeam', 'nbdId', 'nbdName', 'stage', 'outcome',
-  'reason', 'nextFollowUp', 'meetingDate', 'meetingTime', 'opf', 'orderValue', 'updatedAt', 'salesId', 'salesName'];
+  'reason', 'nextFollowUp', 'meetingDate', 'meetingTime', 'opf', 'orderValue', 'updatedAt', 'salesId', 'salesName', 'altPhone'];
 var TL_COLS = ['time', 'enquiryNo', 'byId', 'byName', 'type', 'text', 'nextFollowUp', 'fromName', 'toName'];
 var QUOTE_COLS = ['enquiryNo', 'quoteNo', 'docType', 'brand', 'amount', 'linkedQuote', 'byId', 'byName', 'date'];
 var PA_COLS = ['enquiryNo', 'step', 'owner', 'planned', 'actual', 'delayMinutes'];
@@ -42,7 +42,7 @@ var STAGES = ['New', 'Not connected', 'Follow-up', '1st meeting', 'Send proposal
 var SALES_STAGES = ['1st meeting', 'Send proposal', 'Negotiation'];
 var OLD_STAGES = { 'Contacted': 'Follow-up', 'Valid': 'Follow-up', 'Meeting': '1st meeting', 'Proposal': 'Send proposal' };
 var LOG_TYPES = ['Call', 'Note', 'Follow-up', 'WhatsApp', 'Meeting', 'Telephonic', 'Client Visit', 'Showroom', 'Video Call'];
-var SCHEMA = '3';
+var SCHEMA = '4';
 
 function normStage_(s) { s = str_(s); return OLD_STAGES[s] || s; }
 
@@ -558,6 +558,7 @@ function handle_(b) {
           case 'reassign': return actionReassign_(b, team);
           case 'close-lead': return actionClose_(b);
           case 'link-quote': return actionLinkQuote_(b);
+          case 'edit-contact': return actionEditContact_(b);
           default: fail_('Unknown action');
         }
       });
@@ -599,6 +600,38 @@ function actionLinkQuote_(b) {
   addTimeline_(enq, { id: b.byId, name: b.byName }, 'Quotation', (isPi ? 'Proforma invoice ' : 'Quotation ') + no + (str_(b.brand) ? ' (' + str_(b.brand) + ')' : '') + ', Rs. ' + amount.toLocaleString('en-IN'), '', '', '');
   l.updatedAt = now_();
   writeLead_(l);
+  return { ok: true };
+}
+
+function actionEditContact_(b) {
+  var l = findLead_(b.enquiryNo);
+  var first = str_(b.firstName), last = str_(b.lastName);
+  if (!first) fail_('Enter the customer name');
+  var pk = phoneKey_(b.phone);
+  if (pk.length < 10) fail_('Enter a 10 digit phone number');
+  var alts = [], seen = {};
+  seen[pk] = true;
+  str_(b.altPhone).split(/[,;\n]+/).forEach(function (x) {
+    x = str_(x);
+    if (!x) return;
+    var k = phoneKey_(x);
+    if (k.length < 10) fail_('Other number "' + x + '" must be 10 digits');
+    if (!seen[k]) { seen[k] = true; alts.push(k); }
+  });
+  var clash = readLeads_().filter(function (o) { return o.enquiryNo !== l.enquiryNo && o.phoneKey === pk; })[0];
+  if (clash) fail_('This number is already on ' + clash.enquiryNo + ' (' + (clash.firstName + ' ' + clash.lastName).trim() + ')');
+  var oldName = (l.firstName + ' ' + l.lastName).trim(), newName = (first + ' ' + last).trim();
+  var oldNums = [l.phone].concat(str_(l.altPhone) ? str_(l.altPhone).split(',') : []).join(', ');
+  var newNums = [pk].concat(alts).join(', ');
+  var changes = [];
+  if (oldName !== newName) changes.push('Name: ' + oldName + ' to ' + newName);
+  if (oldNums !== newNums) changes.push('Phone: ' + oldNums + ' to ' + newNums);
+  if (!changes.length) return { ok: true, unchanged: true };
+  l.firstName = first; l.lastName = last;
+  l.phone = pk; l.phoneKey = pk; l.altPhone = alts.join(', ');
+  l.updatedAt = now_();
+  writeLead_(l);
+  addTimeline_(l.enquiryNo, { id: b.byId, name: b.byName }, 'Contact corrected', changes.join('. '), '', '', '');
   return { ok: true };
 }
 

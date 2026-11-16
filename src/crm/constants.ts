@@ -182,6 +182,7 @@ export interface Lead {
   updatedAt: string;
   salesId?: string;
   salesName?: string;
+  altPhone?: string;
 }
 
 export interface TimelineEntry {

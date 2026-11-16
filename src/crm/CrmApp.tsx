@@ -121,7 +121,7 @@ export function CrmApp({ onQuote }: { onQuote?: (lead: Lead, reuse?: { no: strin
       (!fKind || (fKind === 'Self generated') === (l.group === 'Direct')) &&
       (!since || (l.createdAt || '').slice(0, 10) >= since) &&
       (!fMine || l.ownerId === me.id) && (!fLate || (l.outcome === 'Open' && isOverdue(l))) &&
-      (!s || [fullName(l), l.phone, l.enquiryNo, l.city, l.company, l.email, l.requirement].join(' ').toLowerCase().includes(s))
+      (!s || [fullName(l), l.phone, l.altPhone || '', l.enquiryNo, l.city, l.company, l.email, l.requirement].join(' ').toLowerCase().includes(s))
     );
   }, [data, me, q, fNbd, fSales, fSource, fKind, fAge, fMine, fLate, today]);
 
