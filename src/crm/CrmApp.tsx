@@ -81,7 +81,7 @@ export function CrmApp({ onQuote }: { onQuote?: (lead: Lead, reuse?: { no: strin
   const [fAge, setFAge] = useState('');
   const [fMine, setFMine] = useState(false);
   const [fLate, setFLate] = useState(false);
-  const [sort, setSort] = useState<'due' | 'new' | 'old'>('due');
+  const [sort, setSort] = useState<'due' | 'new' | 'old'>('new');
   const [showFilters, setShowFilters] = useState(false);
   const [picker, setPicker] = useState(false);
   const [shown, setShown] = useState(PAGE);
@@ -291,7 +291,7 @@ export function CrmApp({ onQuote }: { onQuote?: (lead: Lead, reuse?: { no: strin
               {filterField('Type of lead', <Combo dense value={fKind} onChange={setFKind} placeholder="All" clearLabel="Online and self generated" ariaLabel="Type of lead" options={opts(['Online', 'Self generated'])} />)}
               {filterField('Added', <Combo dense value={fAge} onChange={setFAge} placeholder="Any time" clearLabel="Any time" ariaLabel="Added"
                 options={[{ value: 'today', label: 'Today' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }]} />)}
-              {filterField('Sort by', <Combo dense value={sort} onChange={v => setSort((v || 'due') as any)} placeholder="Due first" ariaLabel="Sort by"
+              {filterField('Sort by', <Combo dense value={sort} onChange={v => setSort((v || 'new') as any)} placeholder="Newest first" ariaLabel="Sort by"
                 options={[{ value: 'due', label: 'Due first' }, { value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }]} />)}
             </div>
           </div>
