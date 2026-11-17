@@ -42,6 +42,9 @@ export function allowedBrands(b: Brand): Brand[] {
   return [b];
 }
 
+/** Upholstery and add-on categories that can also be sold as an item on their own (Little Nap only). */
+export const STANDALONE_CATS = ['Upholstery', 'Accessories', 'Single Motor Controls', 'Dual Motor Controls', 'Three Motor Controls', 'Other Accessories', 'Veneer Arm'];
+
 export const emptyDiscount = (): Discount => ({ mode: 'pct', value: 0 });
 
 export function discountAmount(base: number, d: Discount | undefined): number {
@@ -135,7 +138,10 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
   p.lines.forEach((l, idx) => {
     const label = `Item ${idx + 1} (${l.item || 'unnamed'})`;
     if (!allowedBrands(p.brand).includes(l.brand)) problems.push(`${label} belongs to ${l.brand}. ${p.brand} and ${l.brand} cannot be in the same quotation.`);
-    if (num(l.qty) < 1) problems.push(`${label}: quantity must be at least 1.`);
+    if (l.standalone ? !(num(l.qty) > 0) : num(l.qty) < 1) problems.push(`${label}: quantity must be ${l.standalone ? 'above zero' : 'at least 1'}.`);
+    if (l.standalone && l.brand !== 'Little Nap') problems.push(`${label}: only Little Nap upholstery and add-ons can be sold on their own.`);
+    if (l.standalone && l.options.length) problems.push(`${label}: an item sold on its own has no customisation.`);
+    if (l.standalone && !STANDALONE_CATS.includes(l.category)) problems.push(`${label}: this item cannot be sold on its own.`);
     if (num(l.unitPrice) < 0) problems.push(`${label}: price cannot be negative.`);
     if (l.custom) {
       problems.push(`${label}: only items from the price list can be added.`);
@@ -143,7 +149,7 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
       const row = map.get(rowKey(l.brand, l.category, l.item, l.variant));
       if (!row) problems.push(`${label} is not in the ${l.brand} price list.`);
       else if (r2(row.price) !== r2(num(l.listPrice))) problems.push(`${label}: the price list has changed since it was picked. Please re-select it.`);
-      if (project) { if (!(num(l.unitPrice) >= 0)) problems.push(`${label}: enter a special price of zero or more.`); }
+      if (project || l.standalone) { if (!(num(l.unitPrice) >= 0)) problems.push(`${label}: enter a price of zero or more.`); }
       else if (r2(num(l.unitPrice)) !== r2(num(l.listPrice))) problems.push(`${label}: the price cannot be changed. Use a discount instead.`);
     }
     if (l.options.length && !BRAND_RULES[l.brand]?.customisation) problems.push(`${label}: ${l.brand} has no customisation.`);

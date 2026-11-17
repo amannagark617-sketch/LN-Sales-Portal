@@ -1,7 +1,8 @@
 import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { QuotePayload, TermRow } from './types';
-import { calcTotals, numberToWords, isMetreOption } from './pricing';
+import { calcTotals, numberToWords, isMetreOption, discountAmount, optionUnitTotal } from './pricing';
+import { QuoteLine, LineTotals } from './types';
 
 const GOLD = '#9B7C50';
 const INK = '#0F172A';
@@ -55,6 +56,31 @@ export function termsFor(terms: TermRow[], brand: string, kind: string = 'Retail
     .filter(t => t.brand === brand && t.active && (!t.kind || t.kind === kind))
     .sort((a, b) => a.no - b.no)
     .map(t => t.text);
+}
+
+interface Comp { gross: number; disc: number; net: number }
+
+/** Splits an item's totals into the product itself and each upholstery or add-on, so every line can show its own MRP, discount and price. */
+function lineComponents(l: QuoteLine, lt: LineTotals, project: boolean): Comp[] {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const qty = Math.max(0, Number(l.qty) || 0);
+  const grossOf = (unit: number) => r2(unit * qty);
+  const parts = [grossOf(Number(l.unitPrice) || 0), ...l.options.map(o => grossOf(optionUnitTotal(o)))];
+  if (project) return parts.map(g => ({ gross: g, disc: 0, net: g }));
+  const disc = [
+    l.partDiscounts ? discountAmount(parts[0], l.discount) : 0,
+    ...l.options.map((o, k) => (l.partDiscounts ? discountAmount(parts[k + 1], o.discount) : 0))
+  ];
+  let extra = r2(lt.discount - disc.reduce((a, b) => a + b, 0));
+  const base = parts.reduce((a, b, k) => a + (b - disc[k]), 0);
+  if (extra !== 0 && base > 0) {
+    let given = 0;
+    parts.forEach((g, k) => {
+      const share = k === parts.length - 1 ? r2(extra - given) : r2(extra * (g - disc[k]) / base);
+      disc[k] = r2(disc[k] + share); given = r2(given + share);
+    });
+  }
+  return parts.map((g, k) => ({ gross: g, disc: disc[k], net: r2(g - disc[k]) }));
 }
 
 export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
@@ -215,31 +241,55 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
 
   p.lines.forEach((l, i) => {
     const lt = t.effLines[i];
-    const desc: string[] = [];
-    const main = `${l.item}${l.variant && l.variant !== 'Standard' ? ` (${l.variant})` : ''}`;
+    const q = Math.max(0.0001, Number(l.qty) || 1);
+    const comps = lineComponents(l, lt, project);
+    const metreMain = l.category === 'Upholstery' || isMetreOption(l);
+    const qtyText = (n: number, metre: boolean) => `${Number.isInteger(n) ? n : n.toFixed(2)}${metre ? ' m' : ''}`;
+
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
-    desc.push(...doc.splitTextToSize(main, descW));
-    const specLines: string[] = [];
+    const desc: string[] = doc.splitTextToSize(`${l.item}${l.variant && !['Standard', 'Per seat', 'Per piece'].includes(l.variant) ? ` (${l.variant})` : ''}`, descW);
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
-    (l.specs || []).filter(s => s.label.trim() && s.value.trim()).forEach((s, k) => {
-      specLines.push(...doc.splitTextToSize(`${String.fromCharCode(97 + (k % 26))}. ${s.label.trim()} : ${s.value.trim()}`, descW - 3));
+    const specLines: string[] = [];
+    (l.specs || []).filter(sp => sp.label.trim() && sp.value.trim()).forEach((sp, k) => {
+      specLines.push(...doc.splitTextToSize(`${String.fromCharCode(97 + (k % 26))}. ${sp.label.trim()} : ${sp.value.trim()}`, descW - 3));
     });
-    const optLines: string[] = [];
-    l.options.forEach(o => {
-      const q = o.qty > 1 ? ` x${o.qty}` : '';
+    const opts = l.options.map((o, k) => {
+      const per = o.qty > 1 ? ` x${Number.isInteger(o.qty) ? o.qty : o.qty.toFixed(2)}` : '';
       const od = !project && l.partDiscounts && o.discount && o.discount.value > 0
-        ? (o.discount.mode === 'pct'
-            ? `  less ${o.discount.value}%`
-            : `  less Rs. ${money(o.discount.value)}`)
+        ? (o.discount.mode === 'pct' ? `  less ${o.discount.value}%` : `  less Rs. ${money(o.discount.value)}`)
         : '';
-      const base = isMetreOption(o)
-        ? `+ ${o.item} - ${o.qty} m @ Rs. ${money(o.unitPrice)} per metre  Rs. ${money(o.unitPrice * o.qty)}`
-        : `+ ${o.item}${o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? ` (${o.variant})` : ''}${q}  Rs. ${money(o.unitPrice * o.qty)}`;
-      optLines.push(...doc.splitTextToSize(base + od, descW - 3));
+      const label = isMetreOption(o)
+        ? `+ ${o.item} - ${o.qty} m`
+        : `+ ${o.item}${o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? ` (${o.variant})` : ''}${per}`;
+      return { lines: doc.splitTextToSize(label + od, descW - 3) as string[], comp: comps[k + 1] };
     });
-    if (l.note) optLines.push(...doc.splitTextToSize(`Note: ${l.note}`, descW - 3));
-    const h = Math.max((desc.length * 4.2) + ((specLines.length + optLines.length) * 3.6) + 4 + (specLines.length ? 1 : 0), hasDisc ? 10 : 8);
+    const noteLines: string[] = l.note ? doc.splitTextToSize(`Note: ${l.note}`, descW - 3) : [];
+
+    const h = Math.max(desc.length * 4.2 + 1.5, hasDisc ? 10 : 8)
+      + (specLines.length ? specLines.length * 3.6 + 1 : 0)
+      + opts.reduce((sum, o) => sum + o.lines.length * 3.6 + 0.8, 0)
+      + noteLines.length * 3.6 + 2;
     space(h, true);
+
+    const numbers = (c: { gross: number; disc: number; net: number }, yy: number, qtyTxt: string, main: boolean) => {
+      doc.text(qtyTxt, colQty, yy, { align: 'right' });
+      doc.text(money((project ? c.net : c.gross) / q), colRate, yy, { align: 'right' });
+      if (hasDisc) {
+        if (c.disc > 0) {
+          doc.text(`-${money(c.disc / q)}`, colDisc, yy, { align: 'right' });
+          if (main) {
+            const pct = c.gross > 0 ? Math.round(c.disc / c.gross * 10000) / 100 : 0;
+            doc.setFontSize(7); doc.setTextColor(GREY);
+            doc.text(`(${pct}%)`, colDisc, yy + 3.6, { align: 'right' });
+            doc.setFontSize(8.5); doc.setTextColor(INK);
+          }
+        } else {
+          doc.text('-', colDisc, yy, { align: 'right' });
+        }
+        doc.text(money(c.net / q), colSpecial, yy, { align: 'right' });
+      }
+      doc.text(money(c.net), colTotal, yy, { align: 'right' });
+    };
 
     const top = y + 4.5;
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(INK);
@@ -247,28 +297,20 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.setFont('Helvetica', 'bold');
     doc.text(desc, 27, top);
     doc.setFont('Helvetica', 'normal');
-    const perPiece = (project ? lt.net : lt.gross) / Math.max(1, l.qty);
-    doc.text(String(l.qty), colQty, top, { align: 'right' });
-    doc.text(money(perPiece), colRate, top, { align: 'right' });
-    if (hasDisc) {
-      const q = Math.max(1, l.qty);
-      if (lt.discount > 0) {
-        const pct = lt.gross > 0 ? Math.round(lt.discount / lt.gross * 10000) / 100 : 0;
-        doc.text(`-${money(lt.discount / q)}`, colDisc, top, { align: 'right' });
-        doc.setFontSize(7); doc.setTextColor(GREY);
-        doc.text(`(${pct}%)`, colDisc, top + 3.6, { align: 'right' });
-        doc.setFontSize(8.5); doc.setTextColor(INK);
-      } else {
-        doc.text('-', colDisc, top, { align: 'right' });
-      }
-      doc.text(money(lt.net / q), colSpecial, top, { align: 'right' });
-    }
-    doc.text(money(lt.net), colTotal, top, { align: 'right' });
-    let oy = top + (desc.length - 1) * 4.2 + 3.8;
+    numbers(comps[0], top, qtyText(l.qty, metreMain), true);
+
+    let oy = top + (desc.length - 1) * 4.2 + 4.2 + (hasDisc && comps[0].disc > 0 ? 0 : 0);
     doc.setFontSize(7.5); doc.setTextColor(GREY);
-    specLines.forEach(s => { doc.text(s, 29, oy); oy += 3.6; });
+    specLines.forEach(sp => { doc.text(sp, 29, oy); oy += 3.6; });
     if (specLines.length) oy += 1;
-    optLines.forEach(s => { doc.text(s, 29, oy); oy += 3.6; });
+    opts.forEach(o => {
+      doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY);
+      doc.text(o.lines, 29, oy);
+      numbers(o.comp, oy, qtyText(l.qty, false), false);
+      oy += o.lines.length * 3.6 + 0.8;
+    });
+    doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY);
+    noteLines.forEach(nl => { doc.text(nl, 29, oy); oy += 3.6; });
     y += h;
     doc.setDrawColor(LINE); doc.setLineWidth(0.2); doc.line(15, y, W - 15, y);
   });

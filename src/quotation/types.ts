@@ -76,6 +76,8 @@ export interface QuoteLine {
   discount: Discount;
   /** true when the discount covers the item only and each upholstery or add-on carries its own discount */
   partDiscounts?: boolean;
+  /** an upholstery or add-on sold on its own: the price can be edited and the quantity can be in metres */
+  standalone?: boolean;
   note?: string;
   /** optional product specifications shown under the item on the document */
   specs?: SpecLine[];

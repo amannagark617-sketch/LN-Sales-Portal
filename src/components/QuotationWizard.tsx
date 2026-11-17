@@ -8,7 +8,7 @@ import {
   Brand, BRANDS, DocType, QuoteKind, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload, SpecLine
 } from '../quotation/types';
 import {
-  BRAND_RULES, allowedBrands, isMetreOption, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
+  BRAND_RULES, allowedBrands, isMetreOption, calcTotals, emptyDiscount, STANDALONE_CATS, formatINR, lineIsEdited, rowKey
 } from '../quotation/pricing';
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { ItemPicker, ItemGroup } from './ItemPicker';
@@ -226,7 +226,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
       if (reuse) {
         setError('');
         fetchCrmQuote(reuse.no).then(r => { openRecord(r, reuse.asPI); setLeadNo(lead.enquiryNo); }).catch((e: any) => { setStep(1); setError(e.message || 'Could not open that quotation.'); });
-      } else setStep(1);
+      } else setStep(0);
     }
   }, [lead]);
 
@@ -335,7 +335,8 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
   const rowToLine = (r: PriceRow): QuoteLine => ({
     id: uid(), brand: r.brand, category: r.category, item: r.item, variant: r.variant,
-    qty: 1, unitPrice: r.price, listPrice: r.price, options: [], discount: emptyDiscount()
+    qty: 1, unitPrice: r.price, listPrice: r.price, options: [], discount: emptyDiscount(),
+    ...(STANDALONE_CATS.includes(r.category) ? { standalone: true } : {})
   });
   const rowToOption = (r: PriceRow): LineOption => ({
     id: uid(), brand: r.brand, category: r.category, item: r.item, variant: r.variant,
@@ -351,7 +352,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
   const groups: ItemGroup[] = useMemo(() => {
     const out: ItemGroup[] = [];
-    brandRows.slice().sort((x, y) => x.order - y.order).filter(r => mainCats.includes(r.category)).forEach(r => {
+    brandRows.slice().sort((x, y) => x.order - y.order).filter(r => mainCats.includes(r.category) || (r.brand === 'Little Nap' && STANDALONE_CATS.includes(r.category))).forEach(r => {
       const key = `${r.category}|${r.item}`;
       let g = out.find(x => x.key === key);
       if (!g) { g = { key, item: r.item, category: r.category, rows: [] }; out.push(g); }
@@ -415,8 +416,8 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     }
     if (s === 2) {
       if (!lines.length) return 'Add at least one item.';
-      const bad = lines.find(l => l.qty < 1);
-      if (bad) return 'Every item needs a quantity of at least 1.';
+      const bad = lines.find(l => (l.standalone ? !(l.qty > 0) : l.qty < 1));
+      if (bad) return 'Every item needs a quantity.';
     }
     if (s === 3 && !(gstRate >= 0 && gstRate <= 28)) return 'GST % must be between 0 and 28.';
     if (s === 3 && freight.mode === 'extra' && !(freight.amount > 0)) return 'Enter the freight amount, or choose "Included".';
@@ -712,7 +713,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
               {step === 2 && (
                 <div className="space-y-5">
-                  <ItemPicker groups={groups} title="Choose a model" variantTitle="Choose seats and type" buttonLabel={lines.length ? 'Add another item' : 'Add item'} onPick={addPicked} />
+                  <ItemPicker groups={groups} title="Choose a model, upholstery or add-on" variantTitle="Choose seats and type" buttonLabel={lines.length ? 'Add another item' : 'Add item'} onPick={addPicked} />
 
                   {!lines.length && <p className="text-sm text-slate-500 text-center py-6">Tap "Add item", then pick the model and its seats and type. The price comes from the price list.</p>}
 
@@ -724,11 +725,11 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                       <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 border-t border-slate-100">
                         <div className="min-w-0 text-sm">
                           <div className="font-medium">{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? <span className="text-slate-500 font-normal"> · {o.variant}</span> : null}</div>
-                          <div className="text-xs text-slate-500">{kind === 'Project' ? 'Special price' : fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : o.category === 'Upholstery' ? 'per seat or metre' : 'each'}</div>
+                          <div className="text-xs text-slate-500">{kind === 'Project' ? 'Special price' : fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : o.category === 'Upholstery' ? 'per seat' : 'each'}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           {kind === 'Project' && <PriceInput value={o.unitPrice} list={o.listPrice} onChange={v => updateOption(l.id, o.id, { unitPrice: v })} />}
-                          {(isMetreOption(o) || o.category === 'Upholstery')
+                          {isMetreOption(o)
                             ? <MeterInput value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
                             : <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />}
                           <button className="text-red-600" aria-label="Remove" onClick={() => setLines(ls => ls.map(x => x.id === l.id ? { ...x, options: x.options.filter(y => y.id !== o.id) } : x))}><Trash2 size={17} /></button>
@@ -750,16 +751,19 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                         </div>
 
                         <div className="flex items-center justify-between mt-4">
-                          <div><div className={label}>{kind === 'Project' ? 'Special price each (incl. GST)' : 'Price each (incl. GST)'}</div>
-                            {kind === 'Project'
+                          <div><div className={label}>{kind === 'Project' ? 'Special price each (incl. GST)' : l.standalone ? 'Price each (incl. GST), editable' : 'Price each (incl. GST)'}</div>
+                            {kind === 'Project' || l.standalone
                               ? <PriceInput value={l.unitPrice} list={l.listPrice} onChange={v => updateLine(l.id, { unitPrice: v })} />
                               : <div className="text-sm font-bold">{formatINR(l.unitPrice)}</div>}</div>
-                          <div><div className={label}>Quantity</div><Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} /></div>
+                          <div><div className={label}>{l.standalone && (l.category === 'Upholstery' || isMetreOption(l)) ? 'Metres' : 'Quantity'}</div>
+                            {l.standalone && (l.category === 'Upholstery' || isMetreOption(l))
+                              ? <MeterInput value={l.qty} onChange={v => updateLine(l.id, { qty: v })} />
+                              : <Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} />}</div>
                         </div>
 
                         <div className="mt-5"><SpecEditor specs={l.specs || []} onChange={sp => updateLine(l.id, { specs: sp })} /></div>
 
-                        {BRAND_RULES[l.brand].customisation && (
+                        {BRAND_RULES[l.brand].customisation && !l.standalone && (
                           <div className="mt-5 space-y-5">
                             <div>
                               <div className="text-sm font-semibold text-slate-900 mb-1">Upholstery <span className="font-normal text-slate-400">(seats, or metres such as 1.7)</span></div>

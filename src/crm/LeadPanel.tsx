@@ -211,6 +211,17 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote, onSale }: {
         </div>
       )}
 
+      {open && ((onQuote && iOwn) || (onSale && canUpdate && quotes.some(q => q.docType === 'PI'))) && (
+        <div className="px-4 md:px-5 py-3 border-b border-slate-200 flex flex-wrap gap-2">
+          {onQuote && iOwn && <button onClick={() => onQuote(lead)} className={btnSm}><Plus size={14} /> New quotation</button>}
+          {onQuote && iOwn && (() => {
+            const pending = quotes.find(q => q.docType === 'Quotation' && !q.convertedTo);
+            return pending ? <button onClick={() => onQuote(lead, { no: pending.quoteNo, asPI: true })} className={`${btnSm} !border-teal-700 !text-teal-800`}>Convert {pending.quoteNo} to PI</button> : null;
+          })()}
+          {onSale && canUpdate && quotes.some(q => q.docType === 'PI') && <button onClick={() => onSale(lead, quotes.find(q => q.docType === 'PI'))} className={btnSm}>Record sale</button>}
+        </div>
+      )}
+
       {(canUpdate && panel === 'update') && (
         <div className="px-4 md:px-5 py-4 border-b border-slate-200 bg-slate-50 space-y-3">
           {ctx === 'call' && (
