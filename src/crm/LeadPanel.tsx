@@ -97,6 +97,11 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
     if (ctx === 'call') {
       if (!need(f.conn, 'Choose Connected or Not connected') || !need(f.sub, 'Choose an option')) return;
       if (f.sub === 'Invalid') return invalid();
+      if (f.sub === 'Valid' && canAlign && f.assign === 'Salesperson') {
+        const toId = f.toId || salesDefault;
+        if (!need(f.text.trim(), 'Write the remarks') || !need(toId, 'Pick a salesperson') || !need(f.date, 'Pick the meeting date')) return;
+        return run({ action: 'align', toId, meetingDate: f.date, meetingTime: f.time, text: f.text });
+      }
       if (!need(f.next, 'Pick the next follow-up date')) return;
       if (f.sub === 'Call again') return run({ action: 'log-activity', type: 'Call', stage: 'Not connected', text: f.text, nextFollowUp: f.next });
       if (!need(f.text.trim(), 'Write the remarks')) return;
@@ -206,13 +211,34 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
               </Group>
               {f.conn === 'Connected' && (
                 <Group label="Lead is" required>
-                  <Choice options={['Valid', 'Invalid'] as any} value={f.sub} onChange={(v: any) => setF(p => ({ ...p, sub: v, reason: '' }))} />
+                  <Choice options={['Valid', 'Invalid'] as any} value={f.sub} onChange={(v: any) => setF(p => ({ ...p, sub: v, reason: '', assign: 'Myself', toId: '' }))} />
                 </Group>
               )}
               {f.conn === 'Not connected' && (
                 <Choice options={['Call again', 'Invalid'] as any} value={f.sub} onChange={(v: any) => setF(p => ({ ...p, sub: v, reason: '' }))} labels={{ 'Invalid': 'Invalid number' } as any} />
               )}
-              {f.sub === 'Valid' && <>{remarks()}{nextField}</>}
+              {f.sub === 'Valid' && (
+                <>
+                  {remarks()}
+                  {canAlign && (
+                    <Group label="Assigned to">
+                      <Choice options={['Myself', 'Salesperson'] as any} value={f.assign as any} onChange={(v: any) => setF(p => ({ ...p, assign: v, toId: '' }))} />
+                    </Group>
+                  )}
+                  {canAlign && f.assign === 'Salesperson' ? (
+                    <>
+                      <Field label="Salesperson" required hint={salesDefault ? `Last with ${lead.salesName}. Change it if needed.` : undefined}>
+                        <Combo value={f.toId || salesDefault} onChange={v => set('toId', v)} placeholder="Search salesperson"
+                          options={data.sales.map(s => ({ value: s.id, label: `${s.name} · ${s.showroom || s.region}` }))} />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Meeting date" required><input type="date" className={inputCls} min={todayStr()} value={f.date} onChange={e => set('date', e.target.value)} /></Field>
+                        <Field label="Meeting time"><input type="time" className={inputCls} value={f.time} onChange={e => set('time', e.target.value)} /></Field>
+                      </div>
+                    </>
+                  ) : nextField}
+                </>
+              )}
               {f.sub === 'Call again' && <>{nextField}{remarks(false)}</>}
               {f.sub === 'Invalid' && reasonFields('Invalid')}
             </>

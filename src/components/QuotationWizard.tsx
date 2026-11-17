@@ -5,7 +5,7 @@ import {
   fetchPriceList, fetchNextNumber, saveQuotation, fetchBankDetails, fetchQuotationHistory, QuotationData
 } from '../services/dataService';
 import {
-  Brand, BRANDS, DocType, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload, SpecLine
+  Brand, BRANDS, DocType, QuoteKind, PriceListPayload, PriceRow, QuoteLine, LineOption, QuotePayload, SpecLine
 } from '../quotation/types';
 import {
   BRAND_RULES, allowedBrands, isMetreOption, calcTotals, emptyDiscount, formatINR, lineIsEdited, rowKey
@@ -133,6 +133,14 @@ const MeterInput = ({ value, onChange }: { value: number; onChange: (v: number) 
   );
 };
 
+const PriceInput = ({ value, onChange, list }: { value: number; onChange: (v: number) => void; list: number }) => (
+  <div>
+    <input className="h-10 w-32 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-right focus:outline-none focus:border-slate-400" type="number" min={0} aria-label="Special price"
+      value={Number.isFinite(value) ? value : ''} onChange={e => onChange(Math.max(0, Number(e.target.value) || 0))} />
+    <div className="text-[11px] text-slate-400 text-right mt-0.5">List {list.toLocaleString('en-IN')}</div>
+  </div>
+);
+
 const DiscountInput = ({ value, onChange }: { value: { mode: 'pct' | 'amt'; value: number }; onChange: (d: { mode: 'pct' | 'amt'; value: number }) => void }) => (
   <div className="flex gap-2">
     <select className="h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={value.mode} onChange={e => onChange({ ...value, mode: e.target.value as 'pct' | 'amt' })}>
@@ -183,7 +191,8 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [site, setSite] = useState('');
   const [installation, setInstallation] = useState(0);
-  const [advance, setAdvance] = useState(0);
+  const [kind, setKind] = useState<QuoteKind>('Retail');
+  const [companyBlock, setCompanyBlock] = useState('');
   const [showBank, setShowBank] = useState(true);
   const [contactPhone, setContactPhone] = useState(() => { try { return salesperson.mobile || localStorage.getItem(`ln_contact_phone_${salesperson.id}`) || ''; } catch { return salesperson.mobile || ''; } });
   const [contactEmail, setContactEmail] = useState(() => { try { return salesperson.email || localStorage.getItem(`ln_contact_email_${salesperson.id}`) || ''; } catch { return ''; } });
@@ -241,7 +250,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     load();
     (async () => {
       try {
-        const banks = (await fetchBankDetails()).filter(x => x.showroomOrRegion.trim() && x.bankingDetails.trim());
+        const banks = (await fetchBankDetails()).filter(x => x.showroomOrRegion.trim() && (x.bankingDetails.trim() || (x.companyDetails || '').trim()));
         const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
         const sh = norm(salesperson.showroom || '');
         const rg = norm(salesperson.region || '');
@@ -253,6 +262,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
           || (rg ? banks.find(x => k(x).includes(rg) || rg.includes(k(x))) : undefined);
         setBank(m?.bankingDetails || '');
         setBankFor(m?.showroomOrRegion || '');
+        setCompanyBlock(m?.companyDetails || '');
       } catch { /* bank details are only needed on the PI */ }
     })();
     (async () => {
@@ -278,6 +288,16 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
       } catch { /* logo is optional */ }
     })();
   }, []);
+
+  const chooseKind = (k: QuoteKind) => {
+    if (k === kind) return;
+    setKind(k);
+    setDiscount(emptyDiscount());
+    setLines(ls => ls.map(l => ({
+      ...l, unitPrice: l.listPrice, discount: emptyDiscount(), partDiscounts: false,
+      options: l.options.map(o => ({ ...o, unitPrice: o.listPrice, discount: undefined }))
+    })));
+  };
 
   // changing brand clears items so brands can never mix
   const chooseBrand = (b: Brand) => {
@@ -360,10 +380,10 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const defaultTerms = useMemo(() => {
     const all = price?.terms || [];
     const out: string[] = [];
-    const add = (b: string) => termsFor(all, b).forEach(t => { if (!out.includes(t)) out.push(t); });
+    const add = (b: string) => termsFor(all, b, kind).forEach(t => { if (!out.includes(t)) out.push(t); });
     add(brand);
     return out;
-  }, [price, brand]);
+  }, [price, brand, kind]);
   const effectiveTerms = termsOverride ?? defaultTerms;
 
   const payload: QuotePayload = useMemo(() => {
@@ -371,16 +391,15 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     const hasCust = !!(customer.site || customer.gstin);
     const contact = { phone: contactPhone.trim(), email: contactEmail.trim() };
     return {
-      v: 2, brand, docType,
+      v: 2, brand, docType, kind,
       lines: lines.map(l => ({ ...l, specs: specFilled(l.specs).map(x => ({ label: x.label.trim(), value: x.value.trim() })) })),
       discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean),
       ...(hasCust ? { customer } : {}),
       ...(installation > 0 ? { installation } : {}),
-      ...(advance > 0 ? { advance } : {}),
       showBank,
       ...(contact.phone || contact.email ? { contact } : {})
     };
-  }, [brand, docType, lines, discount, freight, gstRate, effectiveTerms, site, custGstin, installation, advance, showBank, contactPhone, contactEmail]);
+  }, [brand, docType, kind, lines, discount, freight, gstRate, effectiveTerms, site, custGstin, installation, showBank, contactPhone, contactEmail]);
   const totals = useMemo(() => calcTotals(payload), [payload]);
 
 
@@ -404,7 +423,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
   const reset = () => {
     setStep(0); setDocType('Quotation'); setCompany(''); setClientName(''); setMobile(''); setEmail('');
-    setBilling(''); setShipping(''); setSite(''); setCustGstin(''); setInstallation(0); setAdvance(0); setShowBank(true); setAttachPolicy(true); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
+    setBilling(''); setShipping(''); setSite(''); setCustGstin(''); setInstallation(0); setKind('Retail'); setShowBank(true); setAttachPolicy(true); setLines([]); setDiscount(emptyDiscount()); setAttachments([]);
     setLinkedQuotation(''); setLeadNo(''); onLeadChange?.(null); setSaved(null); setError(''); setBrand('Little Nap'); setFreight({ mode: 'extra', amount: 0 }); setGstRate(18); setDiscMode('whole'); setTermsOverride(null);
   };
 
@@ -414,14 +433,16 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     mobile: mobile.trim(), email: email.trim(),
     billing: billing.trim(), shipping: (sameAddr ? billing : shipping).trim(),
     salespersonName: salesperson.name, salespersonId: employeeNo.trim() || salesperson.id, bank,
+    companyDetails: companyBlock,
+    salespersonRole: (salesperson.designation || '').trim() || (salesperson.isManager ? 'Showroom Manager' : 'Sales Executive'),
+    salespersonPhone: contactPhone.trim() || (salesperson.mobile || '').trim(),
     terms: effectiveTerms.map(t => t.trim()).filter(Boolean), logoBase64: logo, lazboyLogoBase64: brand === 'La-Z-Boy' ? lazboyLogo : null
   });
 
   const buildBytes = async (number: string): Promise<Uint8Array> => {
     const core = buildCorePdf(payload, meta(number));
-    // Warehouse policy / brochure goes only on the PI
-    const brochure = docType === 'PI' && attachPolicy ? await getBrochure() : null;
-    return mergePdf(core, { brochure, attachments: docType === 'PI' ? attachments : [] });
+    const brochure = attachPolicy ? await getBrochure() : null;
+    return mergePdf(core, { brochure, attachments });
   };
 
   const download = (bytes: Uint8Array, number: string) => {
@@ -466,10 +487,10 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     try { const j = JSON.parse(r.productsJson); if (j && j.v === 2) p = j; } catch { /* legacy record */ }
     if (!p) { window.alert('This record was made with the old generator and cannot be reopened here.'); return; }
     const b = p.brand;
-    setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setTermsOverride(p.terms && p.terms.length ? p.terms : null); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0) ? 'item' : 'whole');
+    setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setTermsOverride(p.terms && p.terms.length ? p.terms : null); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0 || x.options.some(o => (o.discount?.value || 0) > 0)) ? 'item' : 'whole');
     setClientName(r.clientName); setCompany(''); setMobile(String(r.mobileNumber || '')); setEmail(r.emailId || '');
     setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(!r.shippingAddress || r.shippingAddress === r.billingAddress);
-    setSite(p.customer?.site || ''); setCustGstin(p.customer?.gstin || ''); setInstallation(p.installation || 0); setAdvance(p.advance || 0); setShowBank(p.showBank !== false);
+    setSite(p.customer?.site || ''); setCustGstin(p.customer?.gstin || ''); setInstallation(p.installation || 0); setKind(p.kind === 'Project' ? 'Project' : 'Retail'); setShowBank(p.showBank !== false);
     setAttachments([]); setSaved(null); setError('');
     if (asPI) { setDocType('PI'); setLinkedQuotation(r.quotationNumber); setStep(4); }
     else { setDocType('Quotation'); setLinkedQuotation(''); setStep(2); }
@@ -601,6 +622,16 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
               {step === 0 && (
                 <div>
+                  <div className="mb-5">
+                    <div className={label}>Quotation type</div>
+                    <div className="grid grid-cols-2 sm:max-w-sm border border-slate-200 rounded-xl overflow-hidden text-sm font-bold">
+                      {(['Retail', 'Project'] as const).map(k => (
+                        <button key={k} type="button" aria-pressed={kind === k} disabled={docType === 'PI'} onClick={() => chooseKind(k)}
+                          className={`h-11 ${kind === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'} disabled:opacity-60`}>{k}</button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">{kind === 'Retail' ? 'List prices with a discount.' : 'For cinemas and large orders. You enter a special price for each product, upholstery and add-on. No discount.'}{docType === 'PI' ? ' The type is fixed because this Proforma Invoice comes from a quotation.' : ''}</p>
+                  </div>
                   <div className="grid sm:grid-cols-3 gap-4">
                     {QUOTE_BRANDS.map(b => {
                       const look = BRAND_LOOK[b] || BRAND_LOOK['Little Nap'];
@@ -688,9 +719,10 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                       <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 border-t border-slate-100">
                         <div className="min-w-0 text-sm">
                           <div className="font-medium">{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? <span className="text-slate-500 font-normal"> · {o.variant}</span> : null}</div>
-                          <div className="text-xs text-slate-500">{fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : o.category === 'Upholstery' ? 'per seat or metre' : 'each'}</div>
+                          <div className="text-xs text-slate-500">{kind === 'Project' ? 'Special price' : fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : o.category === 'Upholstery' ? 'per seat or metre' : 'each'}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
+                          {kind === 'Project' && <PriceInput value={o.unitPrice} list={o.listPrice} onChange={v => updateOption(l.id, o.id, { unitPrice: v })} />}
                           {(isMetreOption(o) || o.category === 'Upholstery')
                             ? <MeterInput value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
                             : <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />}
@@ -713,7 +745,10 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                         </div>
 
                         <div className="flex items-center justify-between mt-4">
-                          <div><div className={label}>Price each (incl. GST)</div><div className="text-sm font-bold">{formatINR(l.unitPrice)}</div></div>
+                          <div><div className={label}>{kind === 'Project' ? 'Special price each (incl. GST)' : 'Price each (incl. GST)'}</div>
+                            {kind === 'Project'
+                              ? <PriceInput value={l.unitPrice} list={l.listPrice} onChange={v => updateLine(l.id, { unitPrice: v })} />
+                              : <div className="text-sm font-bold">{formatINR(l.unitPrice)}</div>}</div>
                           <div><div className={label}>Quantity</div><Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} /></div>
                         </div>
 
@@ -736,7 +771,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
                         <div className="mt-5 pt-4 border-t border-slate-100 flex justify-between items-center">
                           <span className="text-sm font-medium text-slate-600">Item total</span>
-                          <span className="text-base font-bold">{formatINR(lt.gross)}</span>
+                          <span className="text-base font-bold">{formatINR(kind === 'Project' ? lt.net : lt.gross)}</span>
                         </div>
                       </div>
                     );
@@ -751,6 +786,12 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
               {step === 3 && (
                 <div className="space-y-5">
+                  {kind === 'Project' ? (
+                    <div className={card}>
+                      <h3 className="font-bold mb-1 text-sm">Pricing</h3>
+                      <p className="text-sm text-slate-600">This is a Project quotation. The special prices you entered for each product, upholstery and add-on are the final prices. There is no discount.</p>
+                    </div>
+                  ) : (
                   <div className={card}>
                     <h3 className="font-bold mb-3 text-sm">Discount</h3>
                     <div className="grid grid-cols-2 border border-slate-200 rounded-xl overflow-hidden mb-4 text-sm font-bold">
@@ -758,7 +799,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                         <button key={k} type="button" onClick={() => {
                           if (k === discMode) return;
                           setDiscMode(k);
-                          if (k === 'whole') setLines(ls => ls.map(x => ({ ...x, discount: emptyDiscount() })));
+                          if (k === 'whole') setLines(ls => ls.map(x => ({ ...x, discount: emptyDiscount(), partDiscounts: false, options: x.options.map(o => ({ ...o, discount: undefined })) })));
                           else setDiscount(emptyDiscount());
                         }} className={`h-11 ${discMode === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>{t}</button>
                       ))}
@@ -766,17 +807,26 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                     {discMode === 'whole' ? (
                       <DiscountInput value={discount} onChange={setDiscount} />
                     ) : (
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         {lines.map((l, i) => (
-                          <div key={l.id}>
-                            <div className="text-sm font-semibold mb-1.5">{i + 1}. {l.item}{variantLabel(l.variant) ? ` · ${l.variant}` : ''} <span className="text-slate-400 font-normal">({formatINR(totals.lines[i].gross)})</span></div>
-                            <DiscountInput value={l.discount} onChange={d => updateLine(l.id, { discount: d })} />
+                          <div key={l.id} className="space-y-3">
+                            <div>
+                              <div className="text-sm font-semibold mb-1.5">{i + 1}. {l.item}{variantLabel(l.variant) ? ` · ${l.variant}` : ''} <span className="text-slate-400 font-normal">({formatINR(l.unitPrice * l.qty)})</span></div>
+                              <DiscountInput value={l.discount} onChange={d => updateLine(l.id, { discount: d, partDiscounts: true })} />
+                            </div>
+                            {l.options.map(o => (
+                              <div key={o.id} className="pl-4 border-l-2 border-slate-100">
+                                <div className="text-sm mb-1.5 text-slate-700">{o.item}{o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? ` · ${o.variant}` : ''} <span className="text-slate-400">({formatINR(o.unitPrice * o.qty * l.qty)})</span></div>
+                                <DiscountInput value={o.discount || emptyDiscount()} onChange={d => setLines(ls => ls.map(x => x.id === l.id ? { ...x, partDiscounts: true, options: x.options.map(y => y.id === o.id ? { ...y, discount: d } : y) } : x))} />
+                              </div>
+                            ))}
                           </div>
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-slate-500 mt-3">Prices come from the price list and cannot be edited. Use the discount instead.</p>
+                    <p className="text-xs text-slate-500 mt-3">Prices come from the price list and cannot be edited. Use the discount instead. In "Each item" mode every upholstery and add-on can have its own discount.</p>
                   </div>
+                  )}
 
                   <div className="grid sm:grid-cols-2 gap-5">
                     <div className={card}>
@@ -798,14 +848,12 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                       <p className="text-xs text-slate-500 mt-3">{rule.freightNote}</p>
                     </div>
                     <div className={card}>
-                      <h3 className="font-bold mb-3 text-sm">Installation and advance <span className="font-normal text-slate-400">(optional)</span></h3>
+                      <h3 className="font-bold mb-3 text-sm">Installation <span className="font-normal text-slate-400">(optional)</span></h3>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div><label className={label}>Installation charge (Rs.)</label>
                           <input className={field} type="number" min={0} value={installation || ''} onChange={e => setInstallation(Math.max(0, Number(e.target.value) || 0))} /></div>
-                        <div><label className={label}>Advance received (Rs.)</label>
-                          <input className={field} type="number" min={0} value={advance || ''} onChange={e => setAdvance(Math.max(0, Number(e.target.value) || 0))} /></div>
                       </div>
-                      <p className="text-xs text-slate-500 mt-3">Leave blank to hide these rows. Installation is added to the grand total; advance shows the balance due.</p>
+                      <p className="text-xs text-slate-500 mt-3">Leave blank to hide this row. Installation is added to the grand total.</p>
                     </div>
                   </div>
                 </div>
@@ -817,7 +865,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                     <div className="p-5 border-b border-slate-100 text-sm">
                       <div className="font-bold text-base">{company ? `${clientName} (${company})` : clientName}</div>
                       <div className="text-slate-600 mt-0.5">{mobile}{email ? ` · ${email}` : ''}</div>
-                      <div className="text-slate-500 text-xs mt-1">{brand} · {docType === 'PI' ? 'Proforma Invoice' : 'Quotation'}</div>
+                      <div className="text-slate-500 text-xs mt-1">{brand} · {kind} · {docType === 'PI' ? 'Proforma Invoice' : 'Quotation'}</div>
                     </div>
                     {lines.map((l, i) => (
                       <div key={l.id} className="px-5 py-3 border-b border-slate-100 text-sm flex justify-between gap-3">
@@ -836,8 +884,6 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                       <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
                       {totals.installation > 0 && <div className="flex justify-between"><span>Installation</span><span>{formatINR(totals.installation)}</span></div>}
                       <div className="flex justify-between items-baseline font-semibold pt-3 mt-1 border-t border-slate-200"><span className="text-base">Grand total</span><span className="text-2xl tabular-nums">{formatINR(totals.grandTotal)}</span></div>
-                      {totals.advance > 0 && <div className="flex justify-between pt-2"><span>Advance received</span><span>{formatINR(totals.advance)}</span></div>}
-                      {totals.advance > 0 && <div className="flex justify-between font-semibold"><span>Balance due</span><span>{formatINR(totals.balance)}</span></div>}
                     </div>
                   </div>
 
@@ -865,7 +911,6 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                     <button className={`${btnGhost} !h-10 mt-3`} onClick={() => setTermsOverride([...effectiveTerms, ''])}><Plus size={15} /> Add a term</button>
                   </div>
 
-                  {docType === 'PI' && (
                     <div className={card}>
                       <h3 className="font-bold text-sm mb-1">Attach other documents</h3>
                       <label className="flex items-center gap-2 text-sm mb-3"><input type="checkbox" checked={attachPolicy} onChange={e => setAttachPolicy(e.target.checked)} /> Attach the Warehouse Storage &amp; Dispatch Policy</label>
@@ -879,7 +924,6 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                         </div>
                       ))}
                     </div>
-                  )}
                 </div>
               )}
 

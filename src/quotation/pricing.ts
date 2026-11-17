@@ -1,5 +1,5 @@
 import {
-  Brand, DocType, Discount, Freight, LineOption, LineTotals, PriceRow, QuoteLine, QuotePayload, Totals
+  Brand, DocType, Discount, Freight, LineOption, LineTotals, PriceRow, QuoteKind, QuoteLine, QuotePayload, Totals
 } from './types';
 
 export const GST_RATE = 0.18;
@@ -58,17 +58,29 @@ export function optionUnitTotal(o: LineOption): number {
   return num(o.unitPrice) * Math.max(0, num(o.qty));
 }
 
-export function calcLine(line: QuoteLine): LineTotals {
-  const perPiece = num(line.unitPrice) + line.options.reduce((s, o) => s + optionUnitTotal(o), 0);
-  const gross = r2(perPiece * Math.max(0, num(line.qty)));
-  const discount = discountAmount(gross, line.discount);
+export function calcLine(line: QuoteLine, kind: QuoteKind = 'Retail'): LineTotals {
+  const qty = Math.max(0, num(line.qty));
+  if (kind === 'Project') {
+    const listPer = num(line.listPrice) + line.options.reduce((s, o) => s + num(o.listPrice) * Math.max(0, num(o.qty)), 0);
+    const specialPer = num(line.unitPrice) + line.options.reduce((s, o) => s + optionUnitTotal(o), 0);
+    const special = r2(specialPer * qty);
+    const gross = r2(Math.max(listPer * qty, special));
+    return { gross, discount: r2(gross - special), net: special };
+  }
+  const selfBase = r2(num(line.unitPrice) * qty);
+  const optBases = line.options.map(o => r2(optionUnitTotal(o) * qty));
+  const gross = r2(selfBase + optBases.reduce((s, v) => s + v, 0));
+  const discount = line.partDiscounts
+    ? r2(discountAmount(selfBase, line.discount) + line.options.reduce((s, o, i) => s + discountAmount(optBases[i], o.discount), 0))
+    : discountAmount(gross, line.discount);
   return { gross, discount, net: r2(gross - discount) };
 }
 
-export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight'> & { gstRate?: number; installation?: number; advance?: number }): Totals {
-  const lines = p.lines.map(calcLine);
+export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight' | 'kind'> & { gstRate?: number; installation?: number }): Totals {
+  const project = p.kind === 'Project';
+  const lines = p.lines.map(l => calcLine(l, p.kind));
   const subtotal = r2(lines.reduce((s, l) => s + l.net, 0));
-  const overallDiscount = discountAmount(subtotal, p.discount);
+  const overallDiscount = project ? 0 : discountAmount(subtotal, p.discount);
   const taxable = r2(subtotal - overallDiscount);
   // All list prices are GST-inclusive, so GST is the portion already inside the discounted value.
   const rate = Number.isFinite(Number(p.gstRate)) && p.gstRate !== undefined ? Math.max(0, Number(p.gstRate)) / 100 : GST_RATE;
@@ -77,8 +89,6 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
   const freightExtra = p.freight.mode === 'extra' ? r2(Math.max(0, num(p.freight.amount))) : 0;
   const installation = r2(Math.max(0, num(p.installation)));
   const grandTotal = r2(taxable + freightExtra + installation);
-  const advance = r2(Math.max(0, num(p.advance)));
-  const balance = r2(grandTotal - advance);
   const hasAnyDiscount = overallDiscount > 0 || lines.some(l => l.discount > 0);
   // Share a whole-quotation discount across the items, in proportion to their value
   let given = 0;
@@ -87,7 +97,7 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
     given = r2(given + extra);
     return { gross: l.gross, discount: r2(l.discount + extra), net: r2(l.net - extra) };
   });
-  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, installation, grandTotal, advance, balance, hasAnyDiscount };
+  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, installation, grandTotal, hasAnyDiscount };
 }
 
 export function lineIsEdited(line: QuoteLine): boolean {
@@ -115,6 +125,8 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
   if (!p.lines.length) problems.push('Add at least one item.');
   const rule = BRAND_RULES[p.brand];
   if (!rule) return ['Unknown brand.'];
+  if (p.kind !== undefined && p.kind !== 'Retail' && p.kind !== 'Project') return ['Unknown quotation type.'];
+  const project = p.kind === 'Project';
 
   const map = new Map<string, PriceRow>();
   rows.forEach(r => map.set(rowKey(r.brand, r.category, r.item, r.variant), r));
@@ -130,7 +142,8 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
       const row = map.get(rowKey(l.brand, l.category, l.item, l.variant));
       if (!row) problems.push(`${label} is not in the ${l.brand} price list.`);
       else if (r2(row.price) !== r2(num(l.listPrice))) problems.push(`${label}: the price list has changed since it was picked. Please re-select it.`);
-      if (r2(num(l.unitPrice)) !== r2(num(l.listPrice))) problems.push(`${label}: the price cannot be changed. Use a discount instead.`);
+      if (project) { if (!(num(l.unitPrice) >= 0)) problems.push(`${label}: enter a special price of zero or more.`); }
+      else if (r2(num(l.unitPrice)) !== r2(num(l.listPrice))) problems.push(`${label}: the price cannot be changed. Use a discount instead.`);
     }
     if (l.options.length && !BRAND_RULES[l.brand]?.customisation) problems.push(`${label}: ${l.brand} has no customisation.`);
     l.options.forEach(o => {
@@ -143,7 +156,8 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
         const row = map.get(rowKey(o.brand, o.category, o.item, o.variant));
         if (!row) problems.push(`${oLabel} is not in the ${o.brand} price list.`);
         else if (r2(row.price) !== r2(num(o.listPrice))) problems.push(`${oLabel}: the price list has changed since it was picked.`);
-        if (r2(num(o.unitPrice)) !== r2(num(o.listPrice))) problems.push(`${oLabel}: the price cannot be changed.`);
+        if (project) { if (!(num(o.unitPrice) >= 0)) problems.push(`${oLabel}: enter a special price of zero or more.`); }
+        else if (r2(num(o.unitPrice)) !== r2(num(o.listPrice))) problems.push(`${oLabel}: the price cannot be changed.`);
       }
     });
   });
@@ -158,7 +172,6 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
     problems.push('The customer details are not valid.');
   }
   if (p.installation !== undefined && !(num(p.installation) >= 0)) problems.push('Installation must be zero or more.');
-  if (p.advance !== undefined && !(num(p.advance) >= 0)) problems.push('Advance must be zero or more.');
   if (p.contact !== undefined && (typeof p.contact !== 'object' || p.contact === null || [p.contact.phone, p.contact.email].some(x => x !== undefined && bad(x, 120)))) problems.push('The contact details are not valid.');
   if (p.terms !== undefined) {
     if (!Array.isArray(p.terms) || p.terms.length > 40 || p.terms.some(t => typeof t !== 'string' || t.length > 800)) problems.push('The terms and conditions are not valid.');

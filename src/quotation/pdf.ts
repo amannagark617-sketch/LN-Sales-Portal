@@ -20,6 +20,10 @@ export interface PdfMeta {
   shipping: string;
   salespersonName: string;
   salespersonId: string;
+  salespersonRole?: string;
+  salespersonPhone?: string;
+  /** company block for the top right; the first line is printed bold */
+  companyDetails?: string;
   bank?: string;
   terms: string[];
   logoBase64?: string | null;
@@ -37,8 +41,20 @@ export interface Attachment {
 
 const money = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function termsFor(terms: TermRow[], brand: string): string[] {
-  return terms.filter(t => t.brand === brand && t.active).sort((a, b) => a.no - b.no).map(t => t.text);
+export const DEFAULT_COMPANY = [
+  'Little Nap Designs Pvt. Ltd.',
+  'IVR Number: +91 8882800600',
+  'Email: enquiry@littlenap.in',
+  'GSTIN: 06AACCL0576H1ZM',
+  'Corp. Office: 844, M.G. Road, Ghitorni,',
+  'New Delhi - 110030, India'
+].join('\n');
+
+export function termsFor(terms: TermRow[], brand: string, kind: string = 'Retail'): string[] {
+  return terms
+    .filter(t => t.brand === brand && t.active && (!t.kind || t.kind === kind))
+    .sort((a, b) => a.no - b.no)
+    .map(t => t.text);
 }
 
 export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
@@ -47,7 +63,8 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   const t = calcTotals(p);
   const isPI = p.docType === 'PI';
   const title = isPI ? 'PROFORMA INVOICE' : 'QUOTATION';
-  const hasDisc = t.hasAnyDiscount;
+  const project = p.kind === 'Project';
+  const hasDisc = !project && t.hasAnyDiscount;
   const lz = p.brand === 'La-Z-Boy';
   const ACC = lz ? LAZBOY_NAVY : GOLD;   // accent colour
   const HEAD = lz ? LAZBOY_NAVY : INK;   // table header colour
@@ -103,15 +120,19 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
       doc.text(title, lz ? 112 : W / 2, 14 + (lz ? 3 : 0), { align: 'center' });
       doc.setFontSize(10); doc.setTextColor(INK);
       doc.text(p.brand === 'Little Nap' ? 'LITTLE NAP RECLINERS' : lz ? 'LA-Z-BOY RECLINERS' : p.brand.toUpperCase(), lz ? 112 : W / 2, 19.5 + (lz ? 3 : 0), { align: 'center' });
-      doc.setFont('Helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(INK);
-      doc.text('Little Nap Designs Pvt. Ltd.', W - 15, 10, { align: 'right' });
-      doc.setFont('Helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(GREY);
-      doc.text('IVR Number: +91 8882800600', W - 15, 13.5, { align: 'right' });
-      doc.text('Email: enquiry@littlenap.in', W - 15, 17, { align: 'right' });
-      doc.text('GSTIN: 06AACCL0576H1ZM', W - 15, 20.5, { align: 'right' });
-      doc.text('Corp. Office: 844, M.G. Road, Ghitorni,', W - 15, 24, { align: 'right' });
-      doc.text('New Delhi - 110030, India', W - 15, 27.5, { align: 'right' });
-      y = 31;
+      const co = (m.companyDetails && m.companyDetails.trim() ? m.companyDetails : DEFAULT_COMPANY)
+        .split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      let cy = 10;
+      co.forEach((ln, i) => {
+        doc.setFont('Helvetica', i === 0 ? 'bold' : 'normal');
+        doc.setFontSize(i === 0 ? 7.5 : 6.8);
+        doc.setTextColor(i === 0 ? INK : GREY);
+        (doc.splitTextToSize(ln, 70) as string[]).forEach(part => {
+          doc.text(part, W - 15, cy, { align: 'right' });
+          cy += i === 0 ? 3.5 : 3.5;
+        });
+      });
+      y = Math.max(31, cy + 1.5);
     } else {
       doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(GREY);
       doc.text(`${m.number} | Page ${page}`, 15, 12);
@@ -128,7 +149,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.text('Sr.', 17, y + 7);
     doc.text('Item', 27, y + 7);
     doc.text('Qty', colQty, y + 7, { align: 'right' });
-    doc.text('MRP (Rs.)', colRate, y + 5, { align: 'right' });
+    doc.text(project ? 'Price (Rs.)' : 'MRP (Rs.)', colRate, y + 5, { align: 'right' });
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor('#CBD5E1');
     doc.text('(GST included)', colRate, y + 9, { align: 'right' });
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor('#FFFFFF');
@@ -206,10 +227,15 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     const optLines: string[] = [];
     l.options.forEach(o => {
       const q = o.qty > 1 ? ` x${o.qty}` : '';
-      const label = isMetreOption(o)
+      const od = !project && l.partDiscounts && o.discount && o.discount.value > 0
+        ? (o.discount.mode === 'pct'
+            ? `  less ${o.discount.value}%`
+            : `  less Rs. ${money(o.discount.value)}`)
+        : '';
+      const base = isMetreOption(o)
         ? `+ ${o.item} - ${o.qty} m @ Rs. ${money(o.unitPrice)} per metre  Rs. ${money(o.unitPrice * o.qty)}`
         : `+ ${o.item}${o.variant && !['Per seat', 'Per piece'].includes(o.variant) ? ` (${o.variant})` : ''}${q}  Rs. ${money(o.unitPrice * o.qty)}`;
-      optLines.push(...doc.splitTextToSize(label, descW - 3));
+      optLines.push(...doc.splitTextToSize(base + od, descW - 3));
     });
     if (l.note) optLines.push(...doc.splitTextToSize(`Note: ${l.note}`, descW - 3));
     const h = Math.max((desc.length * 4.2) + ((specLines.length + optLines.length) * 3.6) + 4 + (specLines.length ? 1 : 0), hasDisc ? 10 : 8);
@@ -221,7 +247,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.setFont('Helvetica', 'bold');
     doc.text(desc, 27, top);
     doc.setFont('Helvetica', 'normal');
-    const perPiece = lt.gross / Math.max(1, l.qty);
+    const perPiece = (project ? lt.net : lt.gross) / Math.max(1, l.qty);
     doc.text(String(l.qty), colQty, top, { align: 'right' });
     doc.text(money(perPiece), colRate, top, { align: 'right' });
     if (hasDisc) {
@@ -269,10 +295,6 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   doc.setFont('Helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(GREY);
   doc.text(numberToWords(t.grandTotal), 15, y);
   y += 6;
-  if (t.advance > 0) {
-    row('Advance received', `Rs. ${money(t.advance)}`);
-    row('Balance due', `Rs. ${money(t.balance)}`, true);
-  }
   y += 2;
 
   if (m.bank && p.showBank !== false) {
@@ -293,17 +315,21 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     });
   }
 
-  // signature
-  space(18);
+  space(34);
   y += 4;
   doc.setDrawColor(LINE); doc.line(130, y + 10, W - 15, y + 10);
+  doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(INK);
+  let sy = y + 14.5;
+  if (m.salespersonName) { doc.text(m.salespersonName, W - 15, sy, { align: 'right' }); sy += 4; }
   doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(GREY);
-  doc.text('Authorised Signatory', W - 15, y + 14, { align: 'right' });
+  if (m.salespersonRole) { doc.text(m.salespersonRole, W - 15, sy, { align: 'right' }); sy += 4; }
+  if (m.salespersonPhone) { doc.text(`Phone: ${m.salespersonPhone}`, W - 15, sy, { align: 'right' }); sy += 4; }
+  doc.text('Authorised Signatory', W - 15, sy, { align: 'right' });
 
   return doc;
 }
 
-/** Attaches the brochure / warehouse policy (PI only) and any extra files the user chose. */
+/** Attaches the brochure / warehouse policy and any extra files the user chose. */
 export async function mergePdf(core: jsPDF, opts: { brochure?: ArrayBuffer | null; attachments?: Attachment[] }): Promise<Uint8Array> {
   const merged = await PDFDocument.load(core.output('arraybuffer'));
   if (opts.brochure) {

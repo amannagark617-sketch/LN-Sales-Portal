@@ -92,6 +92,7 @@ async function getSalespersons(): Promise<any[]> {
       team: cleanStr(values[9]),
       // blank means still working; only an explicit No switches a person off
       active: cleanStr(values[10]).toLowerCase() !== 'no',
+      designation: cleanStr(values[11]),
     };
   });
 }
@@ -495,7 +496,8 @@ async function getBankDetails(): Promise<any[]> {
     const clean = (val: string | undefined) => val ? val.trim() : '';
     return {
       showroomOrRegion: clean(values[0]),
-      bankingDetails: clean(values[1])
+      bankingDetails: clean(values[1]),
+      companyDetails: clean(values[2])
     };
   });
 }
@@ -630,9 +632,11 @@ async function loadPriceList(): Promise<{ rows: PriceRow[]; terms: TermRow[] }> 
       const brand = asBrand(r[th.indexOf('brand')] || '');
       const text = (r[th.indexOf('text')] || '').trim();
       if (!brand || !text || !isYes(r[th.indexOf('active')])) return;
-      terms.push({ brand, no: Number(r[th.indexOf('no')]) || i + 1, text, active: true });
+      const rawKind = (r[th.indexOf('type')] || r[th.indexOf('kind')] || '').trim().toLowerCase();
+      const kind = rawKind === 'retail' ? 'Retail' : rawKind === 'project' ? 'Project' : '';
+      terms.push({ brand, kind, no: Number(r[th.indexOf('no')]) || i + 1, text, active: true });
     });
-    terms.sort((a, b) => a.brand.localeCompare(b.brand) || a.no - b.no);
+    terms.sort((a, b) => a.brand.localeCompare(b.brand) || (a.kind || '').localeCompare(b.kind || '') || a.no - b.no);
   }
   return { rows, terms };
 }

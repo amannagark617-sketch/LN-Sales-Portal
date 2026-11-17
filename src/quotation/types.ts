@@ -1,5 +1,6 @@
 export type Brand = 'Little Nap' | 'La-Z-Boy' | 'Smart Comfort';
 export type DocType = 'Quotation' | 'PI';
+export type QuoteKind = 'Retail' | 'Project';
 
 export const BRANDS: Brand[] = ['Little Nap', 'La-Z-Boy', 'Smart Comfort'];
 
@@ -16,6 +17,8 @@ export interface PriceRow {
 
 export interface TermRow {
   brand: Brand;
+  /** which quotation type the term is for; empty means both */
+  kind?: QuoteKind | '';
   no: number;
   text: string;
   active: boolean;
@@ -45,6 +48,8 @@ export interface LineOption {
   /** quantity per piece of the main item */
   qty: number;
   custom?: boolean;
+  /** retail discount on this upholstery or add-on */
+  discount?: Discount;
 }
 
 export interface SpecLine {
@@ -69,6 +74,8 @@ export interface QuoteLine {
   custom?: boolean;
   options: LineOption[];
   discount: Discount;
+  /** true when the discount covers the item only and each upholstery or add-on carries its own discount */
+  partDiscounts?: boolean;
   note?: string;
   /** optional product specifications shown under the item on the document */
   specs?: SpecLine[];
@@ -83,6 +90,8 @@ export interface QuotePayload {
   v: 2;
   brand: Brand;
   docType: DocType;
+  /** Retail uses discounts; Project uses manually entered special prices */
+  kind?: QuoteKind;
   lines: QuoteLine[];
   discount: Discount;
   freight: Freight;
@@ -93,8 +102,6 @@ export interface QuotePayload {
   customer?: CustomerExtra;
   /** optional installation charge added to the total */
   installation?: number;
-  /** optional advance received, shown with the balance due */
-  advance?: number;
   /** print the bank details block (default true) */
   showBank?: boolean;
   /** salesperson contact shown in the header block */
@@ -121,8 +128,6 @@ export interface Totals {
   freightExtra: number;
   installation: number;
   grandTotal: number;
-  advance: number;
-  balance: number;
   hasAnyDiscount: boolean;
 }
 

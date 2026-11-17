@@ -12,6 +12,7 @@ export interface Salesperson {
   email?: string;
   team?: string;
   active?: boolean;
+  designation?: string;
   crmAdmin?: boolean;
 }
 
@@ -121,5 +122,6 @@ export interface SalesTarget {
 export interface BankDetails {
   showroomOrRegion: string;
   bankingDetails: string;
+  companyDetails?: string;
 }
 
