@@ -51,6 +51,7 @@ export interface SaleReport {
   advanceAmount: number;
   remarks?: string;
   linkedDocument?: string;
+  enquiryNo?: string;
 }
 
 export interface NoSaleReport {

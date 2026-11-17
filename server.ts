@@ -1070,7 +1070,7 @@ async function startServer() {
         headers: {
           'Content-Type': 'text/plain'
         },
-        body: JSON.stringify({ ...req.body, showroom: currentUser.showroom || '', employeeId: currentUser.id || '', manager: currentUser.isManager ? currentUser.name : (currentUser.manager || ''), linkedDocument: String(req.body?.linkedDocument || '').trim().slice(0, 60) })
+        body: JSON.stringify({ ...req.body, showroom: currentUser.showroom || '', employeeId: currentUser.id || '', manager: currentUser.isManager ? currentUser.name : (currentUser.manager || ''), linkedDocument: String(req.body?.linkedDocument || '').trim().slice(0, 60), enquiryNo: String(req.body?.enquiryNo || '').trim().slice(0, 40) })
       });
 
       // Clear the OPF Data cache so that next polling request fetches fresh reports

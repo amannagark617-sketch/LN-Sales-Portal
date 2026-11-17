@@ -113,6 +113,7 @@ const saleSchema = z.object({
   }, z.number({ message: 'Required' }).min(0, 'Required')),
   remarks: z.string().optional(),
   linkedDocument: z.string().optional(),
+  enquiryNo: z.string().optional(),
   leadSource: z.string().min(1, 'Required'),
   opfNumber: z.string().min(1, 'Required'),
   salespersonName: z.string().min(1, 'Required'),
@@ -175,6 +176,7 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
       grossSales: amount,
       remarks: `Lead ${l.enquiryNo}${link.quote ? `, ${link.quote.docType === 'PI' ? 'PI' : 'quotation'} ${link.quote.quoteNo}` : ''}`,
       linkedDocument: link.quote?.quoteNo || '',
+      enquiryNo: l.enquiryNo || '',
     } as Partial<SaleReport>;
   })();
   const prefilled = Object.fromEntries(Object.entries(fromLead).filter(([, v]) => v !== '' && v !== undefined)) as Partial<SaleReport>;
