@@ -690,7 +690,7 @@ export const Dashboard = ({
                             ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
                             : 'bg-slate-50 text-slate-500 border border-slate-100'
                         }`}>
-                          {s.isManager ? 'Manager' : 'Rep'}
+                          {s.active === false ? 'Left' : s.isManager ? 'Manager' : 'Rep'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right font-semibold text-slate-600">

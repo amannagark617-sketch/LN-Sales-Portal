@@ -381,23 +381,7 @@ async function getCachedTargets(): Promise<any[]> {
   const allUsers = await getCachedSalespersons();
   const allRows = await getCachedOPFDataForViews();
 
-  const lastSaleMonth: Record<string, number> = {};
-  allRows.forEach(r => {
-    if (!r.salesperson || !(r.grossSales > 0)) return;
-    const d = parseSafeDate(r.date);
-    if (!d) return;
-    const key = r.salesperson.trim().toLowerCase();
-    const idx = d.getFullYear() * 12 + d.getMonth();
-    if (!(lastSaleMonth[key] >= idx)) lastSaleMonth[key] = idx;
-  });
-
-  const data = rawTargets.filter(t => {
-    const person = allUsers.find(u => u.name.trim().toLowerCase() === t.salesperson.trim().toLowerCase());
-    if (!person || person.active !== false) return true;
-    const [mStr, yStr] = t.monthYear.split('-');
-    const last = lastSaleMonth[t.salesperson.trim().toLowerCase()];
-    return last !== undefined && Number(yStr) * 12 + Number(mStr) - 1 <= last;
-  }).map(t => {
+  const data = rawTargets.map(t => {
     const [mStr, yStr] = t.monthYear.split('-');
     const m = Number(mStr);
     const y = Number(yStr);
