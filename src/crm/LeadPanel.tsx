@@ -142,16 +142,14 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote, onSale }: {
   const remarks = (req = true) => <Field label="Remarks" required={req}><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What did the customer say?" /></Field>;
   const nextField = <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>;
   const saleQuote = quotes.find(q => q.docType === 'PI') || quotes[0];
-  const closedFields = (
+  const closedFields = onSale ? (
+    <div className="border border-slate-200 bg-white p-3 space-y-2">
+      <div className="text-sm font-bold text-slate-900">Record the sale report</div>
+      <div className="text-xs text-slate-500">The sale report opens with this lead{saleQuote ? ` and ${saleQuote.docType === 'PI' ? 'PI' : 'quotation'} ${saleQuote.quoteNo}` : ''} already filled in. Submitting it closes the lead with the OPF number.</div>
+      <button type="button" onClick={() => onSale(lead, saleQuote)} className={`${btnPrimary} w-full`}>Record sale report</button>
+    </div>
+  ) : (
     <>
-      {onSale && (
-        <div className="border border-slate-200 bg-white p-3 space-y-2">
-          <div className="text-sm font-bold text-slate-900">Record the sale report</div>
-          <div className="text-xs text-slate-500">The sale report opens with this lead{saleQuote ? ` and ${saleQuote.docType === 'PI' ? 'PI' : 'quotation'} ${saleQuote.quoteNo}` : ''} already filled in. Submitting it closes the lead with the OPF number.</div>
-          <button type="button" onClick={() => onSale(lead, saleQuote)} className={`${btnPrimary} w-full`}>Record sale report</button>
-          <div className="text-xs text-slate-500 pt-1">Already recorded the sale? Enter its OPF number and value instead.</div>
-        </div>
-      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="OPF number" required><input className={inputCls} value={f.opf} onChange={e => set('opf', e.target.value)} /></Field>
         <Field label="Order value" required><input className={inputCls} inputMode="numeric" value={f.value} onChange={e => set('value', e.target.value.replace(/[^\d.]/g, ''))} /></Field>
@@ -322,7 +320,7 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote, onSale }: {
           {error && <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
           <div className="sticky bottom-16 md:bottom-0 bg-slate-50 pt-2 pb-1 -mb-1 z-10">
             {moveTo && <div className="text-xs text-slate-500 mb-2">Moves to: <span className="font-bold text-slate-800">{moveTo}</span></div>}
-            <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+            {!(onSale && ctx !== 'call' && f.status === 'Closed') && <button className={`${btnPrimary} w-full`} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>}
           </div>
         </div>
       )}
