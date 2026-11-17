@@ -13,6 +13,7 @@ import {
 import { buildCorePdf, mergePdf, termsFor, Attachment, PdfMeta } from '../quotation/pdf';
 import { ItemPicker, ItemGroup } from './ItemPicker';
 import { fetchCrm, fetchCrmQuote } from '../crm/api';
+import { SHOW_CRM } from '../crm/flag';
 import type { Lead } from '../crm/constants';
 import { Combo } from '../crm/ui';
 
@@ -199,6 +200,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const [myLeads, setMyLeads] = useState<Lead[]>([]);
   const [leadNo, setLeadNo] = useState('');
   useEffect(() => {
+    if (!SHOW_CRM) return;
     fetchCrm().then(d => setMyLeads(d.leads.filter(l => l.outcome === 'Open' && l.ownerId === d.me.id))).catch(() => setMyLeads([]));
   }, []);
   const useLead = (l: Lead | undefined | null) => {

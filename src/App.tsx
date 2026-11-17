@@ -14,6 +14,7 @@ import { NoSaleForm } from './components/NoSaleForm';
 import { Dashboard } from './components/Dashboard';
 import { LogOut, LayoutDashboard, FileText, Ban, History, RefreshCw, Package, Link2, Users } from 'lucide-react';
 import { CrmApp } from './crm/CrmApp';
+import { SHOW_CRM } from './crm/flag';
 import { QuickLinks } from './components/QuickLinks';
 import { MySubmissions } from './components/MySubmissions';
 import { QuotationWizard } from './components/QuotationWizard';
@@ -303,7 +304,7 @@ function MainContent() {
                   </button>
 
                   {/* Leads CRM */}
-                  {user && (user.crmAdmin || user.isManager || ['NBD', 'Sales', 'Manager'].includes(user.team || '')) && (
+                  {SHOW_CRM && user && (user.crmAdmin || user.isManager || ['NBD', 'Sales', 'Manager'].includes(user.team || '')) && (
                     <button
                       onClick={() => setView('crm')}
                       className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
@@ -434,7 +435,7 @@ function MainContent() {
         {view === 'submissions' && <MySubmissions data={mySubmissionsData} />}
         {view === 'stock' && user && <ReadyStock salespersonName={user.name} />}
         {view === 'links' && user && <QuickLinks />}
-        {view === 'crm' && user && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }} />}
+        {SHOW_CRM && view === 'crm' && user && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }} />}
         {view === 'quotation' && user && (
           <QuotationWizard salesperson={user} lead={quoteLead} reuse={quoteReuse} onLeadChange={l => { setQuoteLead(l); if (!l) setQuoteReuse(null); }} />
         )}
