@@ -188,8 +188,8 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     y += 11;
   };
 
-  const space = (h: number, withHead = false) => {
-    if (y + h > 284) {
+  const space = (h: number, withHead = false, limit = 284) => {
+    if (y + h > limit) {
       doc.addPage(); page += 1; header();
       if (withHead) tableHead();
     }
@@ -351,17 +351,17 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.6); doc.setTextColor(GREY);
     m.terms.forEach((tx, i) => {
       const lines = doc.splitTextToSize(`${i + 1}. ${tx}`, W - 30);
-      space(lines.length * 3.4 + 1);
+      space(lines.length * 3.4 + 1, false, 266);
       doc.text(lines, 15, y);
       y += lines.length * 3.4 + 0.8;
     });
   }
 
-  space(34);
-  y += 4;
-  doc.setDrawColor(LINE); doc.line(130, y + 10, W - 15, y + 10);
+  if (y + 24 > 292) { doc.addPage(); page += 1; header(); }
+  y += 2;
+  doc.setDrawColor(LINE); doc.line(130, y + 6, W - 15, y + 6);
   doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(INK);
-  let sy = y + 14.5;
+  let sy = y + 10.5;
   if (m.salespersonName) { doc.text(m.salespersonName, W - 15, sy, { align: 'right' }); sy += 4; }
   doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(GREY);
   if (m.salespersonRole) { doc.text(m.salespersonRole, W - 15, sy, { align: 'right' }); sy += 4; }

@@ -73,6 +73,8 @@ async function getSalespersons(): Promise<any[]> {
   const response = await fetch(`${BASE_URL}501620290`);
   const csvText = await response.text();
   const lines = csvText.split(/\r?\n/);
+  const head = (lines[0] || '').split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(h => cleanStr(h).toLowerCase());
+  const designationCol = head.indexOf('designation');
   return lines.slice(1).filter(line => line.trim() !== '').map(line => {
     const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
     const col5 = cleanStr(values[5]);
@@ -92,7 +94,7 @@ async function getSalespersons(): Promise<any[]> {
       team: cleanStr(values[9]),
       // blank means still working; only an explicit No switches a person off
       active: cleanStr(values[10]).toLowerCase() !== 'no',
-      designation: cleanStr(values[11]),
+      designation: designationCol >= 0 ? cleanStr(values[designationCol]) : '',
     };
   });
 }
