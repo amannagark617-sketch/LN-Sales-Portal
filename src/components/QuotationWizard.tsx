@@ -291,6 +291,11 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
 
   const chooseKind = (k: QuoteKind) => {
     if (k === kind) return;
+    if (k === 'Project' && brand !== 'Little Nap') {
+      if (lines.length && !window.confirm('A Project quotation is only for Little Nap. The items already added will be removed. Continue?')) return;
+      setBrand('Little Nap'); setLines([]); setTermsOverride(null);
+      setFreight({ mode: BRAND_RULES['Little Nap'].freightDefault, amount: 0 });
+    }
     setKind(k);
     setDiscount(emptyDiscount());
     setLines(ls => ls.map(l => ({
@@ -630,7 +635,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                           className={`h-11 ${kind === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'} disabled:opacity-60`}>{k}</button>
                       ))}
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">{kind === 'Retail' ? 'List prices with a discount.' : 'For cinemas and large orders. You enter a special price for each product, upholstery and add-on. No discount.'}{docType === 'PI' ? ' The type is fixed because this Proforma Invoice comes from a quotation.' : ''}</p>
+                    <p className="text-xs text-slate-500 mt-2">{kind === 'Retail' ? 'List prices with a discount.' : 'For cinemas and large orders, Little Nap only. You enter a special price for each product, upholstery and add-on. No discount.'}{docType === 'PI' ? ' The type is fixed because this Proforma Invoice comes from a quotation.' : ''}</p>
                   </div>
                   <div className="grid sm:grid-cols-3 gap-4">
                     {QUOTE_BRANDS.map(b => {
@@ -638,7 +643,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                       const on = brand === b;
                       const rules = BRAND_RULES[b];
                       return (
-                        <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI'} aria-pressed={on}
+                        <button key={b} onClick={() => chooseBrand(b)} disabled={docType === 'PI' || (kind === 'Project' && b !== 'Little Nap')} aria-pressed={on}
                           className="group relative flex flex-col h-full text-left rounded-xl bg-white overflow-hidden border transition-shadow hover:shadow-md disabled:opacity-60 disabled:hover:shadow-none"
                           style={{ borderColor: on ? look.accent : '#E2E8F0', boxShadow: on ? `0 0 0 1px ${look.accent}` : undefined }}>
                           <div className="h-1.5 shrink-0" style={{ background: look.accent }} />
