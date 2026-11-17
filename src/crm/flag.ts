@@ -1,1 +1,1 @@
-export const SHOW_CRM = false;
+export const SHOW_CRM = true;
