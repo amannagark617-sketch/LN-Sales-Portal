@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, ListChecks, Users, Plus, SlidersHorizontal, X, Search, ChevronDown, Check } from 'lucide-react';
-import { fetchCrm, crmAction, CrmData } from './api';
+import { fetchCrm, crmAction, CrmData, CrmQuote } from './api';
 import { Lead, normStage, plannedOf, isOverdue, isDueToday, stepLabel, STAGES } from './constants';
 import { LeadRow, Combo, opts, StageDot, btnPrimary, btnGhost, todayStr, addDays, fullName } from './ui';
 import { LeadPanel } from './LeadPanel';
@@ -66,7 +66,7 @@ function usePaneMetrics(ready: boolean) {
   return { root, top: m.top, max: `calc(100vh - ${Math.max(m.top, m.start) + 12}px)` };
 }
 
-export function CrmApp({ onQuote }: { onQuote?: (lead: Lead, reuse?: { no: string; asPI: boolean }) => void }) {
+export function CrmApp({ onQuote, onSale }: { onQuote?: (lead: Lead, reuse?: { no: string; asPI: boolean }) => void; onSale?: (lead: Lead, quote?: CrmQuote) => void }) {
   const [data, setData] = useState<CrmData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -346,7 +346,7 @@ export function CrmApp({ onQuote }: { onQuote?: (lead: Lead, reuse?: { no: strin
   const detailPane = (
     <div className={`${lead ? '' : 'hidden md:block'} md:sticky md:top-(--crm-top) md:max-h-[calc(var(--crm-max)-64px)] lg:max-h-(--crm-max) md:overflow-y-auto thin-scroll md:bg-white md:border md:border-slate-200 md:rounded-lg`}>
       {lead
-        ? <LeadPanel lead={lead} data={data} onChanged={() => load(true)} onClose={() => setSelected(null)} onQuote={onQuote} />
+        ? <LeadPanel lead={lead} data={data} onChanged={() => load(true)} onClose={() => setSelected(null)} onQuote={onQuote} onSale={onSale} />
         : (
           <div className="hidden md:flex flex-col items-center justify-center text-center px-8 py-20">
             <div className="text-base font-extrabold text-slate-900">Pick a lead from the list</div>

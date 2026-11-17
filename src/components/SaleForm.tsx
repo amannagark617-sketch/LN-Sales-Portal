@@ -112,6 +112,7 @@ const saleSchema = z.object({
     return Number(val);
   }, z.number({ message: 'Required' }).min(0, 'Required')),
   remarks: z.string().optional(),
+  linkedDocument: z.string().optional(),
   leadSource: z.string().min(1, 'Required'),
   opfNumber: z.string().min(1, 'Required'),
   salespersonName: z.string().min(1, 'Required'),
@@ -127,7 +128,13 @@ const saleSchema = z.object({
   }
 });
 
-export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubmit }: { salesperson: any, validationData: ValidationData, opfData: OPFData[], codeMap: Record<string, string>, onSubmit: (data: SaleReport) => void }) => {
+const pick = (options: string[], want: string, loose = false) => {
+  const w = (want || '').trim().toLowerCase();
+  if (!w) return '';
+  return options.find(o => o.trim().toLowerCase() === w) || (loose ? options.find(o => { const x = o.trim().toLowerCase(); return x.includes(w) || w.includes(x); }) : '') || '';
+};
+
+export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubmit, link }: { salesperson: any, validationData: ValidationData, opfData: OPFData[], codeMap: Record<string, string>, onSubmit: (data: SaleReport) => void, link?: { lead: any; quote?: any; record?: any } | null }) => {
   const { showNotification } = useNotification();
   const getIstDateString = () => {
     return new Date().toLocaleString("en-GB", { 
@@ -141,6 +148,36 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
         hour12: false 
     }).replace(/(\d+)\/(\d+)\/(\d+), (\d+:\d+:\d+)/, '$3-$2-$1 $4');
   };
+
+  const fromLead = (() => {
+    if (!link?.lead) return {} as Partial<SaleReport>;
+    const l = link.lead;
+    let payload: any = null;
+    try { payload = link.record?.productsJson ? JSON.parse(link.record.productsJson) : null; } catch { payload = null; }
+    const lines: any[] = payload?.lines || [];
+    const qty = lines.reduce((s, x) => s + (Number(x.qty) || 0), 0) || Number(String(l.quantity || '').replace(/[^\d]/g, '')) || undefined;
+    const amount = Number(link.quote?.amount || link.record?.grandTotal || 0) || undefined;
+    const group = String(l.group || '').toLowerCase();
+    const crr = group === 'nbd' ? pick(validationData.crrNbds, 'nbd', true) : group === 'direct' ? pick(validationData.crrNbds, 'crr', true) : '';
+    return {
+      clientName: `${l.firstName || ''} ${l.lastName || ''}`.trim(),
+      companyName: l.company || '',
+      mobileNumber: String(l.phone || '').replace(/\D/g, '').slice(-10),
+      emailId: l.email || '',
+      city: l.city || '',
+      state: l.state || '',
+      leadSource: pick(validationData.leadSources, l.source, true),
+      segment: pick(validationData.segments, l.segment, true),
+      brandName: pick(validationData.brands, link.quote?.brand || link.record?.brandName || '', true),
+      model: pick(validationData.models, lines[0]?.item || '', true),
+      crrNbd: crr,
+      quantity: qty,
+      grossSales: amount,
+      remarks: `Lead ${l.enquiryNo}${link.quote ? `, ${link.quote.docType === 'PI' ? 'PI' : 'quotation'} ${link.quote.quoteNo}` : ''}`,
+      linkedDocument: link.quote?.quoteNo || '',
+    } as Partial<SaleReport>;
+  })();
+  const prefilled = Object.fromEntries(Object.entries(fromLead).filter(([, v]) => v !== '' && v !== undefined)) as Partial<SaleReport>;
 
   const { register, handleSubmit, setValue, watch, formState: { errors, submitCount } } = useForm<SaleReport>({
     resolver: zodResolver(saleSchema as any),
@@ -165,7 +202,8 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
       netSales: 0,
       advanceAmount: undefined,
       grossSales: undefined,
-      quantity: undefined
+      quantity: undefined,
+      ...prefilled
     }
   });
 
@@ -369,6 +407,13 @@ export const SaleForm = ({ salesperson, validationData, opfData, codeMap, onSubm
         <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">Record Sale</h3>
         <p className="text-slate-500 mt-2 font-medium">Please enter the details of your new sale</p>
       </div>
+
+      {link?.lead && (
+        <div className="border border-slate-200 bg-white p-4 text-sm">
+          <div className="font-bold text-slate-900">Sale for lead {link.lead.enquiryNo}{link.quote ? ` · ${link.quote.docType === 'PI' ? 'PI' : 'Quotation'} ${link.quote.quoteNo}` : ''}</div>
+          <div className="text-slate-500 mt-1">Customer, product and amount are filled from the lead{link.quote ? ' and its ' + (link.quote.docType === 'PI' ? 'PI' : 'quotation') : ''}. Check them, then submit. The lead closes with this OPF number.</div>
+        </div>
+      )}
 
       {Object.keys(errors).length > 0 && (
         <div id="validation-errors-banner" className="bg-red-50 border-2 border-red-200 text-red-950 p-5 rounded-2xl shadow-sm space-y-3 animate-pulse-subtle">

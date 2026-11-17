@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, Phone, MessageCircle, Mail, FileText, Plus } from 'lucide-react';
-import { crmAction, fetchTimeline, CrmData } from './api';
+import { crmAction, fetchTimeline, CrmData, CrmQuote } from './api';
 import { Lead, TimelineEntry, SALES_STAGES, MEETING_TYPES, normStage, nextSalesStage, plannedOf, isOverdue, stepLabel } from './constants';
 import { Field, Combo, opts, inputCls, areaCls, btnPrimary, btnGhost, btnSm, DateField, Tag, KindTag, Stepper, dueText, fullName, shortDate, todayStr } from './ui';
 
@@ -42,7 +42,7 @@ function when(t: string): string {
   return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void; onQuote?: (lead: Lead, reuse?: { no: string; asPI: boolean }) => void }) {
+export function LeadPanel({ lead, data, onChanged, onClose, onQuote, onSale }: { lead: Lead; data: CrmData; onChanged: () => Promise<void> | void; onClose: () => void; onQuote?: (lead: Lead, reuse?: { no: string; asPI: boolean }) => void; onSale?: (lead: Lead, quote?: CrmQuote) => void }) {
   const me = data.me;
   const iOwn = lead.ownerId === me.id;
   const quotes = (data.quotes || []).filter(q => q.enquiryNo === lead.enquiryNo).sort((a, b) => b.date.localeCompare(a.date));
@@ -141,8 +141,17 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
   );
   const remarks = (req = true) => <Field label="Remarks" required={req}><textarea className={areaCls} rows={3} value={f.text} onChange={e => set('text', e.target.value)} placeholder="What did the customer say?" /></Field>;
   const nextField = <Field label="Next follow-up date" required><DateField value={f.next} onChange={v => set('next', v)} /></Field>;
+  const saleQuote = quotes.find(q => q.docType === 'PI') || quotes[0];
   const closedFields = (
     <>
+      {onSale && (
+        <div className="border border-slate-200 bg-white p-3 space-y-2">
+          <div className="text-sm font-bold text-slate-900">Record the sale report</div>
+          <div className="text-xs text-slate-500">The sale report opens with this lead{saleQuote ? ` and ${saleQuote.docType === 'PI' ? 'PI' : 'quotation'} ${saleQuote.quoteNo}` : ''} already filled in. Submitting it closes the lead with the OPF number.</div>
+          <button type="button" onClick={() => onSale(lead, saleQuote)} className={`${btnPrimary} w-full`}>Record sale report</button>
+          <div className="text-xs text-slate-500 pt-1">Already recorded the sale? Enter its OPF number and value instead.</div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="OPF number" required><input className={inputCls} value={f.opf} onChange={e => set('opf', e.target.value)} /></Field>
         <Field label="Order value" required><input className={inputCls} inputMode="numeric" value={f.value} onChange={e => set('value', e.target.value.replace(/[^\d.]/g, ''))} /></Field>
@@ -409,6 +418,7 @@ export function LeadPanel({ lead, data, onChanged, onClose, onQuote }: { lead: L
                       ? <a href={q.pdfUrl} target="_blank" rel="noreferrer" className={btnSm}><FileText size={14} /> View PDF</a>
                       : <span className="h-9 px-3 rounded-md bg-slate-50 text-slate-500 text-xs inline-flex items-center">PDF is being prepared. Refresh in a moment.</span>}
                     {onQuote && iOwn && open && q.docType === 'Quotation' && <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: false })} className={btnSm}>Revise</button>}
+                    {onSale && canUpdate && q.docType === 'PI' && <button onClick={() => onSale(lead, q)} className={`${btnSm} !border-teal-700 !text-teal-800`}>Record sale</button>}
                     {onQuote && iOwn && open && q.docType === 'Quotation' && !q.convertedTo && (
                       <button onClick={() => onQuote(lead, { no: q.quoteNo, asPI: true })} className={`${btnSm} !border-teal-700 !text-teal-800`}>Convert to PI</button>
                     )}

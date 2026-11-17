@@ -14,6 +14,7 @@ import { NoSaleForm } from './components/NoSaleForm';
 import { Dashboard } from './components/Dashboard';
 import { LogOut, LayoutDashboard, FileText, Ban, History, RefreshCw, Package, Link2, Users } from 'lucide-react';
 import { CrmApp } from './crm/CrmApp';
+import { crmAction, fetchCrmQuote } from './crm/api';
 import { SHOW_CRM } from './crm/flag';
 import { QuickLinks } from './components/QuickLinks';
 import { MySubmissions } from './components/MySubmissions';
@@ -43,6 +44,7 @@ function MainContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [quoteLead, setQuoteLead] = useState<any>(null);
+  const [saleLink, setSaleLink] = useState<{ lead: any; quote?: any; record?: any } | null>(null);
   const [quoteReuse, setQuoteReuse] = useState<{ no: string; asPI: boolean } | null>(null);
   const [view, setView] = useState<'dashboard' | 'sale' | 'noSale' | 'submissions' | 'quotation' | 'stock' | 'links' | 'crm'>('sale');
 
@@ -197,6 +199,15 @@ function MainContent() {
       }
       
       showNotification('Report submitted successfully!', 'success');
+      if (saleLink?.lead && payloadObject.opfNumber) {
+        try {
+          await crmAction({ action: 'close-lead', enquiryNo: saleLink.lead.enquiryNo, opf: payloadObject.opfNumber, orderValue: String(payloadObject.grossSales || 0), text: saleLink.quote ? `Sale report submitted against ${saleLink.quote.quoteNo}.` : 'Sale report submitted.' });
+          showNotification(`Lead ${saleLink.lead.enquiryNo} is now closed with OPF ${payloadObject.opfNumber}.`, 'success');
+        } catch (e: any) {
+          showNotification(`The sale is saved, but the lead could not be closed: ${e.message}. Close it from the CRM with OPF ${payloadObject.opfNumber}.`, 'error');
+        }
+        setSaleLink(null);
+      }
       await refreshData(true);
       setView('dashboard');
     } catch (err) {
@@ -292,7 +303,7 @@ function MainContent() {
               <div className="flex gap-2 shrink-0 md:gap-2.5">
                   {/* 1. New Sale */}
                   <button 
-                    onClick={() => setView('sale')} 
+                    onClick={() => { setSaleLink(null); setView('sale'); }} 
                     className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
                       view === 'sale' 
                         ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-250/10' 
@@ -435,14 +446,19 @@ function MainContent() {
         {view === 'submissions' && <MySubmissions data={mySubmissionsData} />}
         {view === 'stock' && user && <ReadyStock salespersonName={user.name} />}
         {view === 'links' && user && <QuickLinks />}
-        {SHOW_CRM && view === 'crm' && user && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }} />}
+        {SHOW_CRM && view === 'crm' && user && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }}
+          onSale={async (l, quote) => {
+            let record: any = null;
+            if (quote) { try { record = await fetchCrmQuote(quote.quoteNo); } catch { /* the sale form still fills from the lead */ } }
+            setSaleLink({ lead: l, quote, record }); setView('sale');
+          }} />}
         {view === 'quotation' && user && (
           <QuotationWizard salesperson={user} lead={quoteLead} reuse={quoteReuse} onLeadChange={l => { setQuoteLead(l); if (!l) setQuoteReuse(null); }} />
         )}
         
         {(view === 'sale' || view === 'noSale') && (
           <div className="">
-            {view === 'sale' && validationData && <SaleForm salesperson={user} validationData={validationData} opfData={opfData} codeMap={codeMap} onSubmit={submitReport} />}
+            {view === 'sale' && validationData && <SaleForm key={saleLink?.lead?.enquiryNo || 'new'} salesperson={user} link={saleLink} validationData={validationData} opfData={opfData} codeMap={codeMap} onSubmit={submitReport} />}
             {view === 'noSale' && <NoSaleForm salesperson={user} onSubmit={submitReport} />}
           </div>
         )}
