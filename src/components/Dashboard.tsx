@@ -172,12 +172,9 @@ export const Dashboard = ({
 
   const tableSalespersons = useMemo(() => {
     return regionalSalespersons.filter(s => {
-      if (effectiveShowroom === 'all') return true;
-      const isCurrentShowroom = isMatchingRoom(s.showroom, effectiveShowroom);
-      const sTargets = getSalespersonTargetsForPeriod(s.name);
-      const sSales = getSalespersonSalesForPeriod(s.name);
-
-      return isCurrentShowroom || sTargets > 0 || sSales > 0;
+      const stillHere = s.active !== false && (effectiveShowroom === 'all' || isMatchingRoom(s.showroom, effectiveShowroom));
+      if (stillHere) return true;
+      return getSalespersonTargetsForPeriod(s.name) > 0 || getSalespersonSalesForPeriod(s.name) > 0;
     });
   }, [regionalSalespersons, effectiveShowroom, getSalespersonTargetsForPeriod, getSalespersonSalesForPeriod]);
 

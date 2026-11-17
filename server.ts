@@ -381,7 +381,23 @@ async function getCachedTargets(): Promise<any[]> {
   const allUsers = await getCachedSalespersons();
   const allRows = await getCachedOPFDataForViews();
 
-  const data = rawTargets.map(t => {
+  const lastSaleMonth: Record<string, number> = {};
+  allRows.forEach(r => {
+    if (!r.salesperson || !(r.grossSales > 0)) return;
+    const d = parseSafeDate(r.date);
+    if (!d) return;
+    const key = r.salesperson.trim().toLowerCase();
+    const idx = d.getFullYear() * 12 + d.getMonth();
+    if (!(lastSaleMonth[key] >= idx)) lastSaleMonth[key] = idx;
+  });
+
+  const data = rawTargets.filter(t => {
+    const person = allUsers.find(u => u.name.trim().toLowerCase() === t.salesperson.trim().toLowerCase());
+    if (!person || person.active !== false) return true;
+    const [mStr, yStr] = t.monthYear.split('-');
+    const last = lastSaleMonth[t.salesperson.trim().toLowerCase()];
+    return last !== undefined && Number(yStr) * 12 + Number(mStr) - 1 <= last;
+  }).map(t => {
     const [mStr, yStr] = t.monthYear.split('-');
     const m = Number(mStr);
     const y = Number(yStr);
@@ -977,9 +993,8 @@ async function startServer() {
       const filtered = allTargets.filter(t => {
         if (!t.salesperson) return false;
         const nameLower = t.salesperson.trim().toLowerCase();
-        if (relevantNames.has(nameLower)) return true;
-        if (t.showroom && isRowInManagerRooms(t.showroom, managerRooms)) return true;
-        return false;
+        if (t.showroom) return isRowInManagerRooms(t.showroom, managerRooms);
+        return relevantNames.has(nameLower);
       });
       res.json(filtered);
     } catch (err: any) {
