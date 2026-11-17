@@ -78,7 +78,6 @@ export function calcLine(line: QuoteLine, kind: QuoteKind = 'Retail'): LineTotal
 
 export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight' | 'kind'> & { gstRate?: number; installation?: number }): Totals {
   const project = p.kind === 'Project';
-  if (project && p.brand !== 'Little Nap') return ['A Project quotation is only for Little Nap.'];
   const lines = p.lines.map(l => calcLine(l, p.kind));
   const subtotal = r2(lines.reduce((s, l) => s + l.net, 0));
   const overallDiscount = project ? 0 : discountAmount(subtotal, p.discount);
@@ -128,6 +127,7 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
   if (!rule) return ['Unknown brand.'];
   if (p.kind !== undefined && p.kind !== 'Retail' && p.kind !== 'Project') return ['Unknown quotation type.'];
   const project = p.kind === 'Project';
+  if (project && p.brand !== 'Little Nap') return ['A Project quotation is only for Little Nap.'];
 
   const map = new Map<string, PriceRow>();
   rows.forEach(r => map.set(rowKey(r.brand, r.category, r.item, r.variant), r));
