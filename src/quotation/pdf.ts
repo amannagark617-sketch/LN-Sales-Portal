@@ -97,12 +97,12 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
   let y = 0;
   let page = 1;
 
-  const colQty = hasDisc ? 104 : 125;
-  const colRate = hasDisc ? 125 : 160;   // MRP
+  const colQty = hasDisc ? 98 : 125;
+  const colRate = hasDisc ? 118 : 160;   // MRP
   const colDisc = 147;
   const colSpecial = 169;
   const colTotal = 193;
-  const descW = hasDisc ? 66 : 92;
+  const descW = hasDisc ? 60 : 92;
 
   const header = () => {
     if (lz && page === 1) {
@@ -276,13 +276,14 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
       doc.text(money((project ? c.net : c.gross) / q), colRate, yy, { align: 'right' });
       if (hasDisc) {
         if (c.disc > 0) {
-          doc.text(`-${money(c.disc / q)}`, colDisc, yy, { align: 'right' });
-          if (main) {
-            const pct = c.gross > 0 ? Math.round(c.disc / c.gross * 10000) / 100 : 0;
-            doc.setFontSize(7); doc.setTextColor(GREY);
-            doc.text(`(${pct}%)`, colDisc, yy + 3.6, { align: 'right' });
-            doc.setFontSize(8.5); doc.setTextColor(INK);
-          }
+          const txt = `-${money(c.disc / q)}`;
+          const w = doc.getTextWidth(txt);
+          const pct = c.gross > 0 ? Math.round(c.disc / c.gross * 10000) / 100 : 0;
+          doc.text(txt, colDisc, yy, { align: 'right' });
+          const keepSize = doc.getFontSize();
+          doc.setFontSize(6.3);
+          doc.text(`(${pct}%)`, colDisc - w - 1, yy, { align: 'right' });
+          doc.setFontSize(keepSize);
         } else {
           doc.text('-', colDisc, yy, { align: 'right' });
         }
