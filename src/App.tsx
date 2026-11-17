@@ -195,7 +195,8 @@ function MainContent() {
       });
 
       if (!response.ok) {
-        throw new Error('Secure submission endpoint rejected transaction.');
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Secure submission endpoint rejected transaction.');
       }
       
       showNotification('Report submitted successfully!', 'success');
@@ -212,7 +213,7 @@ function MainContent() {
       setView('dashboard');
     } catch (err) {
       console.error('Submission failed:', err);
-      showNotification('Failed to submit report.', 'error');
+      showNotification(`Failed to submit report. ${(err as any)?.message || ''}`.trim(), 'error');
     }
   };
 

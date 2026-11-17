@@ -1075,6 +1075,14 @@ async function startServer() {
         body: JSON.stringify({ ...req.body, showroom: currentUser.showroom || '', employeeId: currentUser.id || '', manager: currentUser.isManager ? currentUser.name : (currentUser.manager || ''), linkedDocument: String(req.body?.linkedDocument || '').trim().slice(0, 60), enquiryNo: String(req.body?.enquiryNo || '').trim().slice(0, 40) })
       });
 
+      const raw = await response.text();
+      let out: any = null;
+      try { out = JSON.parse(raw); } catch { out = null; }
+      if (!response.ok || !out || out.status !== 'success') {
+        console.error('Report script did not accept the report:', response.status, raw.slice(0, 300));
+        return res.status(502).json({ error: out?.message ? `The sale report sheet said: ${out.message}` : 'The sale report sheet did not accept the report. Check the sale report script deployment.' });
+      }
+
       // Clear the OPF Data cache so that next polling request fetches fresh reports
       opfDataCache = null;
 
