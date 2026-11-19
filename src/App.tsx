@@ -316,7 +316,7 @@ function MainContent() {
                   </button>
 
                   {/* Leads CRM */}
-                  {SHOW_CRM && user && (user.crmAdmin || user.isManager || ['NBD', 'Sales', 'Manager'].includes(user.team || '')) && (
+                  {SHOW_CRM && user && user.crmAdmin && (
                     <button
                       onClick={() => setView('crm')}
                       className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border text-xs md:text-sm whitespace-nowrap leading-none ${
@@ -447,7 +447,7 @@ function MainContent() {
         {view === 'submissions' && <MySubmissions data={mySubmissionsData} />}
         {view === 'stock' && user && <ReadyStock salespersonName={user.name} />}
         {view === 'links' && user && <QuickLinks />}
-        {SHOW_CRM && view === 'crm' && user && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }}
+        {SHOW_CRM && view === 'crm' && user?.crmAdmin && <CrmApp onQuote={(l, reuse) => { setQuoteLead(l); setQuoteReuse(reuse || null); setView('quotation'); }}
           onSale={async (l, quote) => {
             let record: any = null;
             if (quote) { try { record = await fetchCrmQuote(quote.quoteNo); } catch { /* the sale form still fills from the lead */ } }
