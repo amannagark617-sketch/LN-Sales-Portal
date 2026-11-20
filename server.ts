@@ -792,7 +792,7 @@ function crmAdmins(): string[] {
 function isCrmAdmin(u: any): boolean { return crmAdmins().includes((u.id || '').trim()); }
 function crmTeam(u: any): string { return (u.team || '').trim(); }
 function canUseCrm(u: any): boolean {
-  return isCrmAdmin(u);
+  return isCrmAdmin(u) || ['NBD', 'Sales', 'Manager'].includes(crmTeam(u)) || !!u.isManager;
 }
 
 async function callCrm(body: any): Promise<any> {
