@@ -43,7 +43,15 @@ function SpecEditor({ specs, onChange }: { specs: SpecLine[]; onChange: (s: Spec
       {open && (
         <div className="mt-3 space-y-3">
           {SPEC_PRESETS.map(lab => (
-            <div key={lab}><label className={label}>{lab}</label><input className={field} value={valueOf(lab)} onChange={e => setPreset(lab, e.target.value)} /></div>
+            <div key={lab}><label className={label}>{lab}</label><input className={field} value={valueOf(lab)} onChange={e => setPreset(lab, e.target.value)} />
+              {lab.startsWith('Dimensions') && (
+                <div className="flex items-center gap-4 mt-2 text-sm text-slate-700">
+                  <span className="text-xs text-slate-500">Unit</span>
+                  {(['inch', 'mm'] as const).map(u => (
+                    <label key={u} className="flex items-center gap-1.5 cursor-pointer"><input type="radio" checked={(specs.find(x => x.label === lab)?.unit || '') === u} onChange={() => { const has = specs.some(x => x.label === lab); onChange(has ? specs.map(x => x.label === lab ? { ...x, unit: u } : x) : [...specs, { label: lab, value: '', unit: u }]); }} /> {u === 'inch' ? 'Inches' : 'Millimetres (mm)'}</label>
+                  ))}
+                </div>
+              )}</div>
           ))}
           {customs.map((c, i) => (
             <div key={i} className="grid grid-cols-[1fr_auto] gap-2 items-end">
@@ -106,13 +114,25 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-const Stepper = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
-  <div className="inline-flex items-center h-10 rounded-xl border border-slate-200 bg-white">
-    <button type="button" aria-label="Decrease" className="w-10 h-10 flex items-center justify-center text-slate-700 disabled:opacity-30" disabled={value <= 1} onClick={() => onChange(Math.max(1, value - 1))}><Minus size={15} /></button>
-    <span className="w-8 text-center text-sm font-bold">{value}</span>
-    <button type="button" aria-label="Increase" className="w-10 h-10 flex items-center justify-center text-slate-700" onClick={() => onChange(value + 1)}><Plus size={15} /></button>
-  </div>
-);
+const Stepper = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => {
+  const [txt, setTxt] = useState(String(value));
+  useEffect(() => { if (parseInt(txt, 10) !== value) setTxt(String(value)); }, [value]);
+  return (
+    <div className="inline-flex items-center h-10 rounded-xl border border-slate-200 bg-white">
+      <button type="button" aria-label="Decrease" className="w-10 h-10 flex items-center justify-center text-slate-700 disabled:opacity-30" disabled={value <= 1} onClick={() => onChange(Math.max(1, value - 1))}><Minus size={15} /></button>
+      <input inputMode="numeric" aria-label="Quantity" className="w-14 text-center text-sm font-bold focus:outline-none" value={txt}
+        onFocus={e => e.target.select()}
+        onChange={e => {
+          const t = e.target.value.replace(/\D/g, '').slice(0, 5);
+          setTxt(t);
+          const n = parseInt(t, 10);
+          if (n >= 1) onChange(n);
+        }}
+        onBlur={() => { if (!(parseInt(txt, 10) >= 1)) setTxt(String(value)); }} />
+      <button type="button" aria-label="Increase" className="w-10 h-10 flex items-center justify-center text-slate-700" onClick={() => onChange(value + 1)}><Plus size={15} /></button>
+    </div>
+  );
+};
 
 const MeterInput = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => {
   const [txt, setTxt] = useState(String(value));
@@ -133,11 +153,47 @@ const MeterInput = ({ value, onChange }: { value: number; onChange: (v: number) 
   );
 };
 
-const PriceInput = ({ value, onChange, list }: { value: number; onChange: (v: number) => void; list: number }) => (
+type CustomKind = 'model' | 'upholstery' | 'addon';
+/** Project only: an item with its own name and its own price, for things that are not in the price list. */
+const CustomItemForm = ({ kinds, onAdd, buttonLabel }: { kinds: CustomKind[]; onAdd: (c: { kind: CustomKind; name: string; price: number; qty: number; perMetre: boolean }) => void; buttonLabel: string }) => {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<CustomKind>(kinds[0]);
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [qty, setQty] = useState('1');
+  const [perMetre, setPerMetre] = useState(false);
+  const names: Record<CustomKind, string> = { model: 'Model / product', upholstery: 'Upholstery', addon: 'Add-on' };
+  const reset = () => { setName(''); setPrice(''); setQty('1'); setPerMetre(false); setOpen(false); };
+  const q = parseFloat(qty);
+  const ok = name.trim().length > 0 && Number(price) >= 0 && price !== '' && q > 0;
+  if (!open) return <button type="button" className={ADD_BTN} onClick={() => setOpen(true)}><Plus size={16} /> {buttonLabel}</button>;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+      <div className="text-sm font-semibold text-slate-900">Your own item</div>
+      {kinds.length > 1 && (
+        <div className="flex flex-wrap gap-4 text-sm">
+          {kinds.map(k => <label key={k} className="flex items-center gap-1.5 cursor-pointer"><input type="radio" checked={kind === k} onChange={() => setKind(k)} /> {names[k]}</label>)}
+        </div>
+      )}
+      <div><label className={label}>Name</label><input className={field} value={name} maxLength={120} placeholder={kind === 'model' ? 'e.g. PVR Luxe, Connplex L shape' : kind === 'upholstery' ? 'e.g. Italian leather' : 'e.g. Cup holder with light'} onChange={e => setName(e.target.value)} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className={label}>Special price each (Rs., excl. GST)</label><input className={field} type="number" min={0} value={price} onChange={e => setPrice(e.target.value)} /></div>
+        <div><label className={label}>{perMetre ? 'Metres' : 'Quantity'}</label><input className={field} inputMode="decimal" value={qty} onChange={e => setQty(e.target.value.replace(',', '.'))} /></div>
+      </div>
+      {kind === 'upholstery' && <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={perMetre} onChange={e => setPerMetre(e.target.checked)} /> Priced per metre (otherwise per seat)</label>}
+      <div className="flex gap-3">
+        <button type="button" disabled={!ok} className="h-11 rounded-xl px-5 text-sm font-bold text-white disabled:opacity-40" style={{ background: GOLD }} onClick={() => { onAdd({ kind, name: name.trim(), price: Number(price), qty: q, perMetre }); reset(); }}>Add to quotation</button>
+        <button type="button" className="h-11 rounded-xl px-5 text-sm font-medium text-slate-600 border border-slate-200" onClick={reset}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
+const PriceInput = ({ value, onChange, list }: { value: number; onChange: (v: number) => void; list?: number }) => (
   <div>
     <input className="h-10 w-32 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-right focus:outline-none focus:border-slate-400" type="number" min={0} aria-label="Special price"
       value={Number.isFinite(value) ? value : ''} onChange={e => onChange(Math.max(0, Number(e.target.value) || 0))} />
-    <div className="text-[11px] text-slate-400 text-right mt-0.5">List {list.toLocaleString('en-IN')}</div>
+    {list !== undefined && <div className="text-[11px] text-slate-400 text-right mt-0.5">List {list.toLocaleString('en-IN')}</div>}
   </div>
 );
 
@@ -172,7 +228,8 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const [tab, setTab] = useState<'build' | 'history'>('build');
   const [price, setPrice] = useState<PriceListPayload | null>(null);
   const [loadErr, setLoadErr] = useState('');
-  const [bank, setBank] = useState('');
+  const [bankRow, setBankRow] = useState<BankDetails | null>(null);
+  const [bankSet, setBankSet] = useState<1 | 2>(1);
   const [bankFor, setBankFor] = useState('');
   const [logo, setLogo] = useState<string | null>(null);
   const [lazboyLogo, setLazboyLogo] = useState<string | null>(null);
@@ -187,12 +244,15 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const [email, setEmail] = useState('');
   const [billing, setBilling] = useState('');
   const [shipping, setShipping] = useState('');
-  const [sameAddr, setSameAddr] = useState(true);
+  const [sameAddr, setSameAddr] = useState(false);
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [site, setSite] = useState('');
   const [installation, setInstallation] = useState(0);
   const [kind, setKind] = useState<QuoteKind>('Retail');
-  const [companyBlock, setCompanyBlock] = useState('');
+  const hasSecondBank = !!(bankRow && ((bankRow.bankingDetails2 || '').trim() || (bankRow.companyDetails2 || '').trim()));
+  const useSecond = hasSecondBank && bankSet === 2;
+  const bank = bankRow ? (useSecond ? (bankRow.bankingDetails2 || '') : bankRow.bankingDetails) : '';
+  const companyBlock = bankRow ? (useSecond ? (bankRow.companyDetails2 || '') : (bankRow.companyDetails || '')) : '';
   const [showBank, setShowBank] = useState(true);
   const [contactPhone, setContactPhone] = useState(() => { try { return salesperson.mobile || localStorage.getItem(`ln_contact_phone_${salesperson.id}`) || ''; } catch { return salesperson.mobile || ''; } });
   const [contactEmail, setContactEmail] = useState(() => { try { return salesperson.email || localStorage.getItem(`ln_contact_email_${salesperson.id}`) || ''; } catch { return ''; } });
@@ -202,7 +262,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const [termsOverride, setTermsOverride] = useState<string[] | null>(null);
   const [gstRate, setGstRate] = useState(18);
   const [discMode, setDiscMode] = useState<'whole' | 'item'>('whole');
-  const [freight, setFreight] = useState<{ mode: 'included' | 'extra'; amount: number }>({ mode: 'extra', amount: 0 });
+  const [freight, setFreight] = useState<{ mode: 'included' | 'extra' | 'actual'; amount: number }>({ mode: 'extra', amount: 0 });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachPolicy, setAttachPolicy] = useState(true);
   const [linkedQuotation, setLinkedQuotation] = useState('');
@@ -250,7 +310,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     load();
     (async () => {
       try {
-        const banks = (await fetchBankDetails()).filter(x => x.showroomOrRegion.trim() && (x.bankingDetails.trim() || (x.companyDetails || '').trim()));
+        const banks = (await fetchBankDetails()).filter(x => x.showroomOrRegion.trim() && (x.bankingDetails.trim() || (x.companyDetails || '').trim() || (x.bankingDetails2 || '').trim() || (x.companyDetails2 || '').trim()));
         const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
         const sh = norm(salesperson.showroom || '');
         const rg = norm(salesperson.region || '');
@@ -260,9 +320,9 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
           || (rg ? banks.find(x => k(x) === rg) : undefined)
           || (sh ? banks.find(x => k(x).includes(sh) || sh.includes(k(x))) : undefined)
           || (rg ? banks.find(x => k(x).includes(rg) || rg.includes(k(x))) : undefined);
-        setBank(m?.bankingDetails || '');
+        setBankRow(m || null);
+        setBankSet(m && !m.bankingDetails.trim() && !(m.companyDetails || '').trim() ? 2 : 1);
         setBankFor(m?.showroomOrRegion || '');
-        setCompanyBlock(m?.companyDetails || '');
       } catch { /* bank details are only needed on the PI */ }
     })();
     (async () => {
@@ -296,11 +356,13 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
       setBrand('Little Nap'); setLines([]); setTermsOverride(null);
       setFreight({ mode: BRAND_RULES['Little Nap'].freightDefault, amount: 0 });
     }
+    if (k === 'Retail' && lines.some(l => l.custom || l.options.some(o => o.custom)) && !window.confirm('Your own items (not in the price list) are only for Project quotations and will be removed. Continue?')) return;
     setKind(k);
     setDiscount(emptyDiscount());
-    setLines(ls => ls.map(l => ({
+    if (k === 'Retail' && freight.mode === 'actual') setFreight({ mode: 'extra', amount: 0 });
+    setLines(ls => ls.filter(l => !(k === 'Retail' && l.custom)).map(l => ({
       ...l, unitPrice: l.listPrice, discount: emptyDiscount(), partDiscounts: false,
-      options: l.options.map(o => ({ ...o, unitPrice: o.listPrice, discount: undefined }))
+      options: l.options.filter(o => !(k === 'Retail' && o.custom)).map(o => ({ ...o, unitPrice: o.listPrice, discount: undefined }))
     })));
   };
 
@@ -373,6 +435,22 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
   const upholsteryGroups = useMemo(() => makeGroups(brandRows.filter(r => r.brand === 'Little Nap' && r.category === 'Upholstery')), [brandRows]);
   const addonGroups = useMemo(() => makeGroups(brandRows.filter(r => r.brand === 'Little Nap' && addonCats.includes(r.category) && r.category !== 'Upholstery')), [brandRows, categories]);
 
+  const addCustomLine = (c: { kind: CustomKind; name: string; price: number; qty: number; perMetre: boolean }) => {
+    const sa = c.kind !== 'model';
+    setLines(l => [...l, {
+      id: uid(), brand: 'Little Nap', category: c.kind === 'model' ? 'Custom' : c.kind === 'upholstery' ? 'Upholstery' : 'Accessories',
+      item: c.name, variant: c.kind === 'upholstery' ? (c.perMetre ? 'Per metre' : 'Per seat') : c.kind === 'addon' ? 'Per piece' : '',
+      qty: sa ? c.qty : Math.max(1, Math.round(c.qty)), unitPrice: c.price, listPrice: c.price, options: [], discount: emptyDiscount(), custom: true,
+      ...(sa ? { standalone: true } : {})
+    }]);
+  };
+  const addCustomOption = (lid: string, c: { kind: CustomKind; name: string; price: number; qty: number; perMetre: boolean }) => {
+    const opt: LineOption = {
+      id: uid(), brand: 'Little Nap', category: c.kind === 'upholstery' ? 'Upholstery' : 'Accessories', item: c.name,
+      variant: c.kind === 'upholstery' ? (c.perMetre ? 'Per metre' : 'Per seat') : 'Per piece', unitPrice: c.price, listPrice: c.price, qty: c.qty, custom: true
+    };
+    setLines(ls => ls.map(l => l.id === lid ? { ...l, options: [...l.options, opt] } : l));
+  };
   const addPicked = (row: PriceRow) => setLines(l => [...l, rowToLine(row)]);
 
   const updateLine = (id: string, patch: Partial<QuoteLine>) => setLines(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l));
@@ -398,7 +476,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     const contact = { phone: contactPhone.trim(), email: contactEmail.trim() };
     return {
       v: 2, brand, docType, kind,
-      lines: lines.map(l => ({ ...l, specs: specFilled(l.specs).map(x => ({ label: x.label.trim(), value: x.value.trim() })) })),
+      lines: lines.map(l => ({ ...l, specs: specFilled(l.specs).map(x => ({ label: x.label.trim(), value: x.value.trim(), ...(x.unit ? { unit: x.unit } : {}) })) })),
       discount, freight, gstRate, terms: effectiveTerms.map(t => t.trim()).filter(Boolean),
       ...(hasCust ? { customer } : {}),
       ...(installation > 0 ? { installation } : {}),
@@ -695,7 +773,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                   <div><label className={label}>Mobile *</label><input className={field} inputMode="tel" value={mobile} onChange={e => setMobile(e.target.value)} /></div>
                   <div><label className={label}>Email</label><input className={field} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Optional" /></div>
                   <div className="sm:col-span-2"><label className={label}>Billing address</label><textarea className={area} rows={3} value={billing} onChange={e => setBilling(e.target.value)} /></div>
-                  <label className="sm:col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={sameAddr} onChange={e => setSameAddr(e.target.checked)} /> Shipping address is the same as billing</label>
+                  <label className="sm:col-span-2 flex items-center gap-3 text-sm font-medium text-slate-800 cursor-pointer select-none py-1"><input type="checkbox" className="w-6 h-6 shrink-0 cursor-pointer" style={{ accentColor: '#9B7C50' }} checked={sameAddr} onChange={e => setSameAddr(e.target.checked)} /> Shipping address is the same as billing</label>
                   {!sameAddr && <div className="sm:col-span-2"><label className={label}>Shipping address</label><textarea className={area} rows={3} value={shipping} onChange={e => setShipping(e.target.value)} /></div>}
                   <div className="sm:col-span-2 border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2 text-sm font-semibold text-slate-900">More details <span className="font-normal text-slate-400">(optional, shown only if filled)</span></div>
@@ -714,6 +792,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
               {step === 2 && (
                 <div className="space-y-5">
                   <ItemPicker groups={groups} title="Choose a model, upholstery or add-on" variantTitle="Choose seats and type" buttonLabel={lines.length ? 'Add another item' : 'Add item'} onPick={addPicked} />
+                  {kind === 'Project' && <CustomItemForm kinds={['model', 'upholstery', 'addon']} buttonLabel="Add your own item (name and price)" onAdd={addCustomLine} />}
 
                   {!lines.length && <p className="text-sm text-slate-500 text-center py-6">Tap "Add item", then pick the model and its seats and type. The price comes from the price list.</p>}
 
@@ -728,7 +807,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                           <div className="text-xs text-slate-500">{kind === 'Project' ? 'Special price' : fmt0(o.unitPrice)} {isMetreOption(o) ? 'per metre' : o.category === 'Upholstery' ? 'per seat' : 'each'}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          {kind === 'Project' && <PriceInput value={o.unitPrice} list={o.listPrice} onChange={v => updateOption(l.id, o.id, { unitPrice: v })} />}
+                          {kind === 'Project' && <PriceInput value={o.unitPrice} list={o.custom ? undefined : o.listPrice} onChange={v => updateOption(l.id, o.id, { unitPrice: v })} />}
                           {isMetreOption(o)
                             ? <MeterInput value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />
                             : <Stepper value={o.qty} onChange={v => updateOption(l.id, o.id, { qty: v })} />}
@@ -751,12 +830,12 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                         </div>
 
                         <div className="flex items-center justify-between mt-4">
-                          <div><div className={label}>{kind === 'Project' ? 'Special price each (incl. GST)' : l.standalone ? 'Price each (incl. GST), editable' : 'Price each (incl. GST)'}</div>
+                          <div><div className={label}>{kind === 'Project' ? 'Special price each (excl. GST)' : l.standalone ? 'Price each (incl. GST), editable' : 'Price each (incl. GST)'}</div>
                             {kind === 'Project' || l.standalone
-                              ? <PriceInput value={l.unitPrice} list={l.listPrice} onChange={v => updateLine(l.id, { unitPrice: v })} />
+                              ? <PriceInput value={l.unitPrice} list={l.custom ? undefined : l.listPrice} onChange={v => updateLine(l.id, { unitPrice: v })} />
                               : <div className="text-sm font-bold">{formatINR(l.unitPrice)}</div>}</div>
-                          <div><div className={label}>{l.standalone && (l.category === 'Upholstery' || isMetreOption(l)) ? 'Metres' : 'Quantity'}</div>
-                            {l.standalone && (l.category === 'Upholstery' || isMetreOption(l))
+                          <div><div className={label}>{l.standalone && ((l.category === 'Upholstery' && !l.custom) || isMetreOption(l)) ? 'Metres' : 'Quantity'}</div>
+                            {l.standalone && ((l.category === 'Upholstery' && !l.custom) || isMetreOption(l))
                               ? <MeterInput value={l.qty} onChange={v => updateLine(l.id, { qty: v })} />
                               : <Stepper value={l.qty} onChange={v => updateLine(l.id, { qty: v })} />}</div>
                         </div>
@@ -768,12 +847,14 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                             <div>
                               <div className="text-sm font-semibold text-slate-900 mb-1">Upholstery <span className="font-normal text-slate-400">(seats, or metres such as 1.7)</span></div>
                               {upholsteries.map(optionRow)}
-                              <div className="mt-2"><ItemPicker groups={upholsteryGroups} title="Add upholstery" variantTitle="Choose an option" buttonLabel="Add upholstery (leather, fabric…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} /></div>
+                              <div className="mt-2 space-y-2"><ItemPicker groups={upholsteryGroups} title="Add upholstery" variantTitle="Choose an option" buttonLabel="Add upholstery (leather, fabric…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} />
+                                {kind === 'Project' && <CustomItemForm kinds={['upholstery']} buttonLabel="Add your own upholstery" onAdd={c => addCustomOption(l.id, c)} />}</div>
                             </div>
                             <div>
                               <div className="text-sm font-semibold text-slate-900 mb-1">Add-ons</div>
                               {addons.map(optionRow)}
-                              <div className="mt-2"><ItemPicker groups={addonGroups} title="Add an add-on" variantTitle="Choose an option" buttonLabel="Add add-on (motor, switch, veneer…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} /></div>
+                              <div className="mt-2 space-y-2"><ItemPicker groups={addonGroups} title="Add an add-on" variantTitle="Choose an option" buttonLabel="Add add-on (motor, switch, veneer…)" onPick={r => addOption(l.id, r)} className={ADD_BTN} />
+                                {kind === 'Project' && <CustomItemForm kinds={['addon']} buttonLabel="Add your own add-on" onAdd={c => addCustomOption(l.id, c)} />}</div>
                             </div>
                           </div>
                         )}
@@ -842,22 +923,24 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                       <h3 className="font-bold mb-3 text-sm">GST</h3>
                       <label className={label}>GST %</label>
                       <input className={field} type="number" min={0} max={28} step="0.5" value={gstRate} onChange={e => setGstRate(Number(e.target.value))} />
-                      <p className="text-xs text-slate-500 mt-3">Prices already include GST. This sets how much of the total is shown as GST. Default is 18%.</p>
+                      <p className="text-xs text-slate-500 mt-3">{kind === 'Project' ? 'GST is always extra on a Project quotation. It is added at the end, on the special prices, freight and installation.' : 'Prices already include GST. This sets how much of the total is shown as GST. Default is 18%.'}</p>
                     </div>
                     <div className={card}>
-                      <h3 className="font-bold mb-3 text-sm">Freight</h3>
+                      <h3 className="font-bold mb-3 text-sm">Freight{kind === 'Project' ? ' (without GST)' : ''}</h3>
                       <div className="flex gap-5 mb-4 text-sm">
                         <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'included'} onChange={() => setFreight({ mode: 'included', amount: 0 })} /> Included</label>
                         <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'extra'} onChange={() => setFreight({ ...freight, mode: 'extra' })} /> Extra</label>
+                        {kind === 'Project' && <label className="flex items-center gap-2"><input type="radio" checked={freight.mode === 'actual'} onChange={() => setFreight({ mode: 'actual', amount: 0 })} /> On actual</label>}
                       </div>
                       {freight.mode === 'extra' && (
                         <div><label className={label}>Freight amount (Rs.)</label>
                           <input className={field} type="number" min={0} value={freight.amount || ''} onChange={e => setFreight({ mode: 'extra', amount: Math.max(0, Number(e.target.value) || 0) })} /></div>
                       )}
+                      {freight.mode === 'actual' && <p className="text-xs text-slate-600">Freight is worked out when the order is received and paid directly to the transporter. The quotation will say "On actual".</p>}
                       <p className="text-xs text-slate-500 mt-3">{rule.freightNote}</p>
                     </div>
                     <div className={card}>
-                      <h3 className="font-bold mb-3 text-sm">Installation <span className="font-normal text-slate-400">(optional)</span></h3>
+                      <h3 className="font-bold mb-3 text-sm">Installation{kind === 'Project' ? ' (without GST)' : ''} <span className="font-normal text-slate-400">(optional)</span></h3>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div><label className={label}>Installation charge (Rs.)</label>
                           <input className={field} type="number" min={0} value={installation || ''} onChange={e => setInstallation(Math.max(0, Number(e.target.value) || 0))} /></div>
@@ -888,16 +971,36 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
                     <div className="p-5 text-sm space-y-1.5 bg-slate-50">
                       <div className="flex justify-between"><span>Sub total</span><span>{formatINR(totals.subtotal)}</span></div>
                       {totals.overallDiscount > 0 && <div className="flex justify-between"><span>Discount</span><span>- {formatINR(totals.overallDiscount)}</span></div>}
-                      <div className="flex justify-between"><span>Taxable value (excl. GST)</span><span>{formatINR(totals.taxableExGst)}</span></div>
-                      <div className="flex justify-between text-slate-500"><span>GST @ {totals.gstRate}% (included)</span><span>{formatINR(totals.gstIncluded)}</span></div>
-                      <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
-                      {totals.installation > 0 && <div className="flex justify-between"><span>Installation</span><span>{formatINR(totals.installation)}</span></div>}
+                      {kind === 'Project' ? (<>
+                        <div className="flex justify-between"><span>Freight (without GST)</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : freight.mode === 'actual' ? 'On actual' : 'Included'}</span></div>
+                        {totals.installation > 0 && <div className="flex justify-between"><span>Installation (without GST)</span><span>{formatINR(totals.installation)}</span></div>}
+                        <div className="flex justify-between text-slate-500"><span>GST @ {totals.gstRate}% (extra)</span><span>{formatINR(totals.gstExtra)}</span></div>
+                      </>) : (<>
+                        <div className="flex justify-between"><span>Taxable value (excl. GST)</span><span>{formatINR(totals.taxableExGst)}</span></div>
+                        <div className="flex justify-between text-slate-500"><span>GST @ {totals.gstRate}% (included)</span><span>{formatINR(totals.gstIncluded)}</span></div>
+                        <div className="flex justify-between"><span>Freight</span><span>{freight.mode === 'extra' ? formatINR(totals.freightExtra) : 'Included'}</span></div>
+                        {totals.installation > 0 && <div className="flex justify-between"><span>Installation</span><span>{formatINR(totals.installation)}</span></div>}
+                      </>)}
                       <div className="flex justify-between items-baseline font-semibold pt-3 mt-1 border-t border-slate-200"><span className="text-base">Grand total</span><span className="text-2xl tabular-nums">{formatINR(totals.grandTotal)}</span></div>
                     </div>
                   </div>
 
                   <div className={card}>
                     <h3 className="font-bold text-sm mb-2">Bank details{bankFor ? <span className="font-normal text-slate-500"> · {bankFor}</span> : null}</h3>
+                    {hasSecondBank && (
+                      <div className="mb-3">
+                        <div className={label}>Which bank and company details?</div>
+                        <div className="flex flex-col gap-2 text-sm">
+                          {([1, 2] as const).map(n => {
+                            const c = n === 1 ? (bankRow?.companyDetails || '') : (bankRow?.companyDetails2 || '');
+                            const b = n === 1 ? (bankRow?.bankingDetails || '') : (bankRow?.bankingDetails2 || '');
+                            if (n === 1 && !c.trim() && !b.trim()) return null;
+                            const first = (c.trim() || b.trim()).split('\n')[0];
+                            return <label key={n} className="flex items-start gap-2 cursor-pointer"><input type="radio" className="mt-1" checked={bankSet === n} onChange={() => setBankSet(n)} /><span><span className="font-medium">{n === 1 ? 'Option 1' : 'Option 2'}</span> <span className="text-slate-500">{first}</span></span></label>;
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <label className="flex items-center gap-2 text-sm mb-2"><input type="checkbox" checked={showBank} onChange={e => setShowBank(e.target.checked)} /> Show bank details on the document</label>
                     {!showBank ? <p className="text-sm text-slate-500">Bank details will not be printed.</p> : bank ? <p className="text-sm text-slate-700 whitespace-pre-line">{bank}</p> : <p className="text-sm text-red-700">No bank details were found for {salesperson.region || salesperson.showroom || 'your region'}. Add a row for it in the bank details tab of the sheet.</p>}
                   </div>

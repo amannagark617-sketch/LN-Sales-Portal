@@ -175,9 +175,9 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.text('Sr.', 17, y + 7);
     doc.text('Item', 27, y + 7);
     doc.text('Qty', colQty, y + 7, { align: 'right' });
-    doc.text(project ? 'Price (Rs.)' : 'MRP (Rs.)', colRate, y + 5, { align: 'right' });
+    doc.text(project ? 'Special Price' : 'MRP (Rs.)', colRate, y + 5, { align: 'right' });
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor('#CBD5E1');
-    doc.text('(GST included)', colRate, y + 9, { align: 'right' });
+    doc.text(project ? '(Rs., excl. GST)' : '(GST included)', colRate, y + 9, { align: 'right' });
     doc.setFont('Helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor('#FFFFFF');
     if (hasDisc) {
       doc.text('Discount', colDisc, y + 7, { align: 'right' });
@@ -251,7 +251,7 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
     const specLines: string[] = [];
     (l.specs || []).filter(sp => sp.label.trim() && sp.value.trim()).forEach((sp, k) => {
-      specLines.push(...doc.splitTextToSize(`${String.fromCharCode(97 + (k % 26))}. ${sp.label.trim()} : ${sp.value.trim()}`, descW - 3));
+      specLines.push(...doc.splitTextToSize(`${String.fromCharCode(97 + (k % 26))}. ${sp.label.trim()} : ${sp.value.trim()}${sp.unit === 'mm' ? ' (all dimensions in mm)' : sp.unit === 'inch' ? ' (all dimensions in inches)' : ''}`, descW - 3));
     });
     const opts = l.options.map((o, k) => {
       const per = o.qty > 1 ? ` x${Number.isInteger(o.qty) ? o.qty : o.qty.toFixed(2)}` : '';
@@ -326,17 +326,26 @@ export function buildCorePdf(p: QuotePayload, m: PdfMeta): jsPDF {
     doc.text(val, colTotal, y, { align: 'right' });
     y += bold ? 6 : 4.8;
   };
-  row('Sub Total', `Rs. ${money(t.taxable)}`);
-  row('Taxable Value (excl. GST)', `Rs. ${money(t.taxableExGst)}`);
-  row(`GST @ ${t.gstRate}% (included)`, `Rs. ${money(t.gstIncluded)}`);
-  if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
-  else row('Freight', 'Included');
-  if (t.installation > 0) row('Installation', `Rs. ${money(t.installation)}`);
+  if (project) {
+    row('Sub Total (excl. GST)', `Rs. ${money(t.taxable)}`);
+    if (p.freight.mode === 'extra') row('Freight (without GST)', `Rs. ${money(t.freightExtra)}`);
+    else if (p.freight.mode === 'actual') row('Freight', 'On actual');
+    else row('Freight', 'Included');
+    if (t.installation > 0) row('Installation (without GST)', `Rs. ${money(t.installation)}`);
+    row(`GST @ ${t.gstRate}% (extra)`, `Rs. ${money(t.gstExtra)}`);
+  } else {
+    row('Sub Total', `Rs. ${money(t.taxable)}`);
+    row('Taxable Value (excl. GST)', `Rs. ${money(t.taxableExGst)}`);
+    row(`GST @ ${t.gstRate}% (included)`, `Rs. ${money(t.gstIncluded)}`);
+    if (p.freight.mode === 'extra') row('Freight', `Rs. ${money(t.freightExtra)}`);
+    else row('Freight', 'Included');
+    if (t.installation > 0) row('Installation', `Rs. ${money(t.installation)}`);
+  }
   doc.setDrawColor(ACC); doc.setLineWidth(0.5); doc.line(100, y - 3, W - 15, y - 3);
   y += 1.5;
   row('GRAND TOTAL', `Rs. ${money(t.grandTotal)}`, true);
   doc.setFont('Helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(GREY);
-  doc.text(numberToWords(t.grandTotal), 15, y);
+  doc.text(`In words: ${numberToWords(t.grandTotal)}`, 15, y);
   y += 6;
   y += 2;
 

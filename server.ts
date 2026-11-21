@@ -499,7 +499,9 @@ async function getBankDetails(): Promise<any[]> {
     return {
       showroomOrRegion: clean(values[0]),
       bankingDetails: clean(values[1]),
-      companyDetails: clean(values[2])
+      companyDetails: clean(values[2]),
+      bankingDetails2: clean(values[3]),
+      companyDetails2: clean(values[4])
     };
   });
 }
@@ -1345,7 +1347,7 @@ async function startServer() {
         billingAddress: safe(body.billingAddress),
         shippingAddress: safe(body.shippingAddress),
         subtotal: totals.taxable,
-        gstIncluded: totals.gstIncluded,
+        gstIncluded: totals.gstIncluded || totals.gstExtra,
         freight: totals.freightExtra,
         grandTotal: totals.grandTotal,
         amountInWords: numberToWords(totals.grandTotal),

@@ -87,11 +87,13 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
   const taxable = r2(subtotal - overallDiscount);
   // All list prices are GST-inclusive, so GST is the portion already inside the discounted value.
   const rate = Number.isFinite(Number(p.gstRate)) && p.gstRate !== undefined ? Math.max(0, Number(p.gstRate)) / 100 : GST_RATE;
-  const gstIncluded = r2(taxable / (1 + rate) * rate);
-  const taxableExGst = r2(taxable - gstIncluded);
   const freightExtra = p.freight.mode === 'extra' ? r2(Math.max(0, num(p.freight.amount))) : 0;
   const installation = r2(Math.max(0, num(p.installation)));
-  const grandTotal = r2(taxable + freightExtra + installation);
+  // Project: special prices, freight and installation are all without GST; GST is added once, at the end.
+  const gstIncluded = project ? 0 : r2(taxable / (1 + rate) * rate);
+  const taxableExGst = project ? taxable : r2(taxable - gstIncluded);
+  const gstExtra = project ? r2((taxable + freightExtra + installation) * rate) : 0;
+  const grandTotal = project ? r2(taxable + freightExtra + installation + gstExtra) : r2(taxable + freightExtra + installation);
   const hasAnyDiscount = overallDiscount > 0 || lines.some(l => l.discount > 0);
   // Share a whole-quotation discount across the items, in proportion to their value
   let given = 0;
@@ -100,7 +102,7 @@ export function calcTotals(p: Pick<QuotePayload, 'lines' | 'discount' | 'freight
     given = r2(given + extra);
     return { gross: l.gross, discount: r2(l.discount + extra), net: r2(l.net - extra) };
   });
-  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, freightExtra, installation, grandTotal, hasAnyDiscount };
+  return { lines, effLines, subtotal, overallDiscount, taxable, taxableExGst, gstRate: r2(rate * 100), gstIncluded, gstExtra, freightExtra, installation, grandTotal, hasAnyDiscount };
 }
 
 export function lineIsEdited(line: QuoteLine): boolean {
@@ -144,7 +146,12 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
     if (l.standalone && !STANDALONE_CATS.includes(l.category)) problems.push(`${label}: this item cannot be sold on its own.`);
     if (num(l.unitPrice) < 0) problems.push(`${label}: price cannot be negative.`);
     if (l.custom) {
-      problems.push(`${label}: only items from the price list can be added.`);
+      if (!project) problems.push(`${label}: only items from the price list can be added.`);
+      else {
+        if (l.brand !== 'Little Nap') problems.push(`${label}: your own items are only for Little Nap.`);
+        if (!String(l.item || '').trim() || String(l.item).length > 120) problems.push(`${label}: give the item a name (up to 120 characters).`);
+        if (!(num(l.unitPrice) >= 0) || r2(num(l.unitPrice)) !== r2(num(l.listPrice))) problems.push(`${label}: the price is not valid.`);
+      }
     } else {
       const row = map.get(rowKey(l.brand, l.category, l.item, l.variant));
       if (!row) problems.push(`${label} is not in the ${l.brand} price list.`);
@@ -158,7 +165,11 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
       if (o.brand !== l.brand) problems.push(`${oLabel} belongs to ${o.brand}, not ${l.brand}.`);
       if (num(o.qty) <= 0) problems.push(`${oLabel}: quantity must be above zero.`);
       if (o.custom) {
-        problems.push(`${oLabel}: only items from the price list can be added.`);
+        if (!project) problems.push(`${oLabel}: only items from the price list can be added.`);
+        else {
+          if (!String(o.item || '').trim() || String(o.item).length > 120) problems.push(`${oLabel}: give the item a name (up to 120 characters).`);
+          if (!(num(o.unitPrice) >= 0) || r2(num(o.unitPrice)) !== r2(num(o.listPrice))) problems.push(`${oLabel}: the price is not valid.`);
+        }
       } else {
         const row = map.get(rowKey(o.brand, o.category, o.item, o.variant));
         if (!row) problems.push(`${oLabel} is not in the ${o.brand} price list.`);
@@ -184,6 +195,8 @@ export function validatePayload(p: QuotePayload, rows: PriceRow[]): string[] {
     if (!Array.isArray(p.terms) || p.terms.length > 40 || p.terms.some(t => typeof t !== 'string' || t.length > 800)) problems.push('The terms and conditions are not valid.');
   }
   if (p.gstRate !== undefined && !(Number(p.gstRate) >= 0 && Number(p.gstRate) <= 28)) problems.push('GST % must be between 0 and 28.');
+  if (!['included', 'extra', 'actual'].includes(p.freight.mode)) problems.push('Unknown freight option.');
+  if (p.freight.mode === 'actual' && !project) problems.push('"On actual" freight is only for Project quotations.');
   if (p.freight.mode === 'extra' && !(num(p.freight.amount) > 0)) problems.push('Enter the freight amount, or choose "Included".');
   return problems;
 }

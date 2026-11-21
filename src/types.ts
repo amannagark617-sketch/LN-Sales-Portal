@@ -124,5 +124,8 @@ export interface BankDetails {
   showroomOrRegion: string;
   bankingDetails: string;
   companyDetails?: string;
+  /** optional second set, for sales closed outside the showroom's own territory */
+  bankingDetails2?: string;
+  companyDetails2?: string;
 }
 

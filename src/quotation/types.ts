@@ -53,6 +53,7 @@ export interface LineOption {
 }
 
 export interface SpecLine {
+  unit?: 'inch' | 'mm';
   label: string;
   value: string;
 }
@@ -84,7 +85,7 @@ export interface QuoteLine {
 }
 
 export interface Freight {
-  mode: 'included' | 'extra';
+  mode: 'included' | 'extra' | 'actual';
   amount: number;
 }
 
@@ -127,6 +128,8 @@ export interface Totals {
   taxableExGst: number;
   gstRate: number;
   gstIncluded: number;
+  /** Project quotations: GST charged on top of the (ex-GST) prices, freight and installation */
+  gstExtra: number;
   freightExtra: number;
   installation: number;
   grandTotal: number;
