@@ -573,7 +573,7 @@ export function QuotationWizard({ salesperson, lead, reuse, onLeadChange }: Prop
     const b = p.brand;
     setBrand(b); setLines(p.lines); setDiscount(p.discount); setFreight(p.freight); setGstRate(p.gstRate ?? 18); setTermsOverride(p.terms && p.terms.length ? p.terms : null); setDiscMode(p.lines.some(x => (x.discount?.value || 0) > 0 || x.options.some(o => (o.discount?.value || 0) > 0)) ? 'item' : 'whole');
     setClientName(r.clientName); setCompany(''); setMobile(String(r.mobileNumber || '')); setEmail(r.emailId || '');
-    setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(!r.shippingAddress || r.shippingAddress === r.billingAddress);
+    setBilling(r.billingAddress || ''); setShipping(r.shippingAddress || ''); setSameAddr(false);
     setSite(p.customer?.site || ''); setCustGstin(p.customer?.gstin || ''); setInstallation(p.installation || 0); setKind(p.kind === 'Project' ? 'Project' : 'Retail'); setShowBank(p.showBank !== false);
     setAttachments([]); setSaved(null); setError('');
     if (asPI) { setDocType('PI'); setLinkedQuotation(r.quotationNumber); setStep(4); }
