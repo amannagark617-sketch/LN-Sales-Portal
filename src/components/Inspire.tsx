@@ -84,6 +84,15 @@ const CSS = `
 @keyframes inspire-in { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes inspire-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes inspire-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes inspire-back { 0%, 12% { transform: rotate(0deg); } 45%, 70% { transform: rotate(-24deg); } 100% { transform: rotate(0deg); } }
+@keyframes inspire-foot { 0%, 12% { transform: rotate(78deg); } 45%, 70% { transform: rotate(-3deg); } 100% { transform: rotate(78deg); } }
+@keyframes inspire-floor { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -28; } }
+@keyframes inspire-glow { 0%, 12% { opacity: 0; } 45%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.rc-back { transform-origin: 72px 34px; animation: inspire-back 7s ease-in-out infinite; }
+.rc-foot { transform-origin: 118px 36px; animation: inspire-foot 7s ease-in-out infinite; }
+.rc-floor { animation: inspire-floor 2.4s linear infinite; }
+.rc-glow { animation: inspire-glow 7s ease-in-out infinite; }
+.inspire-paused .rc-back, .inspire-paused .rc-foot, .inspire-paused .rc-floor, .inspire-paused .rc-glow { animation-play-state: paused; }
 @keyframes inspire-drift { from { background-position-x: 0; } to { background-position-x: -360px; } }
 .inspire-in { animation: inspire-in .7s cubic-bezier(.2,.7,.2,1) both; }
 .inspire-in-2 { animation: inspire-in .7s .12s cubic-bezier(.2,.7,.2,1) both; }
@@ -92,7 +101,7 @@ const CSS = `
 .inspire-helix { animation: inspire-drift 26s linear infinite; }
 .inspire-paused .inspire-fill, .inspire-paused .inspire-helix { animation-play-state: paused; }
 .inspire-q { font-family: 'Fraunces', Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: -0.012em; font-optical-sizing: auto; }
-@media (prefers-reduced-motion: reduce) { .inspire-in, .inspire-in-2, .inspire-rule, .inspire-helix { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .inspire-in, .inspire-in-2, .inspire-rule, .inspire-helix, .rc-back, .rc-foot, .rc-floor, .rc-glow { animation: none !important; } }
 `;
 
 export default function Inspire({ className = '' }: { className?: string }) {
@@ -152,7 +161,24 @@ export default function Inspire({ className = '' }: { className?: string }) {
         <button type="button" aria-label="Next" className="hidden sm:flex w-10 h-10 shrink-0 items-center justify-center text-slate-400 hover:text-slate-900 transition-colors" onClick={() => next(1)}><ChevronRight size={22} /></button>
       </div>
 
-      <div className="inspire-helix h-10 opacity-90" style={{ backgroundImage: helixUri, backgroundRepeat: 'repeat-x', backgroundSize: '360px 40px' }} aria-hidden />
+      {it.kind === 'Sales tip' ? (
+        <div className="inspire-in h-14 flex items-end justify-center overflow-hidden" key={`rc-${i}`} aria-hidden>
+          <svg viewBox="0 0 400 56" className="h-14 w-[400px] max-w-full" preserveAspectRatio="xMidYMax meet">
+            <line className="rc-floor" x1="0" y1="52" x2="400" y2="52" stroke="#9B7C50" strokeWidth="1.4" strokeDasharray="10 18" strokeLinecap="round" opacity=".55" />
+            <g transform="translate(130 0)">
+              <ellipse className="rc-glow" cx="92" cy="50" rx="62" ry="3.5" fill="#9B7C50" fillOpacity=".2" />
+              <rect x="80" y="44" width="34" height="5" rx="2" fill="#9B7C50" />
+              <rect x="94" y="38" width="6" height="8" fill="#9B7C50" />
+              <g className="rc-foot"><rect x="118" y="32" width="26" height="7" rx="3.5" fill="#B8975F" /></g>
+              <g className="rc-back"><rect x="66" y="6" width="13" height="32" rx="6.5" fill="#9B7C50" /><rect x="64" y="2" width="17" height="9" rx="4.5" fill="#B8975F" /></g>
+              <rect x="68" y="30" width="54" height="10" rx="5" fill="#9B7C50" />
+              <rect x="76" y="22" width="40" height="6" rx="3" fill="#B8975F" />
+            </g>
+          </svg>
+        </div>
+      ) : (
+        <div className="inspire-helix h-10 opacity-90" style={{ backgroundImage: helixUri, backgroundRepeat: 'repeat-x', backgroundSize: '360px 40px' }} aria-hidden />
+      )}
 
       <div className="border-t border-slate-100 px-4 sm:px-6 h-10 flex items-center justify-between text-xs">
         <button type="button" className="font-bold text-slate-600 hover:text-slate-900" onClick={() => setOpen(o => !o)}>{open ? 'Hide the full Little Nap DNA' : 'Read the full Little Nap DNA'}</button>
