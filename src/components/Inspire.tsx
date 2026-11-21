@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Kind = 'Vision' | 'Purpose' | 'Brand promise' | 'Mission' | 'Culture' | 'Core value' | 'Sales tip';
@@ -47,52 +47,133 @@ const TIPS: Item[] = [
   { kind: 'Sales tip', text: 'Keep the next step dated. Every open lead should have a call or meeting with a date, never just "later".' }
 ];
 
-const pick = (pool: Item[]) => Math.floor(Math.random() * pool.length);
+
+const TABS: { id: string; label: string; kinds: Kind[]; color: string }[] = [
+  { id: 'all', label: 'All', kinds: [], color: '#1E293B' },
+  { id: 'vision', label: 'Vision', kinds: ['Vision'], color: COLOR['Vision'] },
+  { id: 'purpose', label: 'Purpose', kinds: ['Purpose'], color: COLOR['Purpose'] },
+  { id: 'promise', label: 'Promise', kinds: ['Brand promise'], color: COLOR['Brand promise'] },
+  { id: 'mission', label: 'Mission', kinds: ['Mission'], color: COLOR['Mission'] },
+  { id: 'culture', label: 'Culture', kinds: ['Culture'], color: COLOR['Culture'] },
+  { id: 'values', label: 'Values', kinds: ['Core value'], color: COLOR['Core value'] },
+  { id: 'tips', label: 'Sales tips', kinds: ['Sales tip'], color: COLOR['Sales tip'] }
+];
+
+const shuffle = <T,>(a: T[]) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+/** One piece of DNA, then one tip, then DNA again, in a random order each visit. */
+const weave = (): Item[] => {
+  const d = shuffle(DNA), t = shuffle(TIPS), out: Item[] = [];
+  for (let i = 0; i < Math.max(d.length, t.length); i++) { if (d[i]) out.push(d[i]); if (t[i]) out.push(t[i]); }
+  return out;
+};
+
+// A double helix that drifts along the bottom of the card, in the Little Nap DNA colours.
+const helixUri = (() => {
+  const W = 360, H = 40, mid = 20, amp = 13, cols = ['#14B8A6', '#2563EB', '#BE3A86', '#7C4DDB', '#E0A526', '#16803C'];
+  const y1 = (x: number) => mid + amp * Math.sin((x / W) * Math.PI * 4);
+  const y2 = (x: number) => mid - amp * Math.sin((x / W) * Math.PI * 4);
+  let a = '', b = '', rungs = '', dots = '';
+  for (let x = 0; x <= W; x += 6) { a += `${x === 0 ? 'M' : 'L'}${x} ${y1(x).toFixed(1)}`; b += `${x === 0 ? 'M' : 'L'}${x} ${y2(x).toFixed(1)}`; }
+  for (let x = 9; x < W; x += 18) rungs += `<line x1="${x}" y1="${y1(x).toFixed(1)}" x2="${x}" y2="${y2(x).toFixed(1)}" stroke="#CBD5E1" stroke-width="1"/>`;
+  for (let k = 0; k < 12; k++) { const x = 15 + k * 30; dots += `<circle cx="${x}" cy="${y1(x).toFixed(1)}" r="2.4" fill="${cols[k % cols.length]}"/><circle cx="${x}" cy="${y2(x).toFixed(1)}" r="2.4" fill="${cols[(k + 3) % cols.length]}"/>`; }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#14B8A6"/><stop offset=".35" stop-color="#2563EB"/><stop offset=".7" stop-color="#BE3A86"/><stop offset="1" stop-color="#E0A526"/></linearGradient><linearGradient id="h" x1="0" x2="1"><stop offset="0" stop-color="#E0A526"/><stop offset=".4" stop-color="#7C4DDB"/><stop offset=".75" stop-color="#2563EB"/><stop offset="1" stop-color="#14B8A6"/></linearGradient></defs>${rungs}<path d="${a}" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linecap="round"/><path d="${b}" fill="none" stroke="url(#h)" stroke-width="2.4" stroke-linecap="round"/>${dots}</svg>`;
+  return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+})();
+
+const CSS = `
+@keyframes inspire-in { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes inspire-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes inspire-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes inspire-drift { from { background-position-x: 0; } to { background-position-x: -360px; } }
+.inspire-in { animation: inspire-in .7s cubic-bezier(.2,.7,.2,1) both; }
+.inspire-in-2 { animation: inspire-in .7s .12s cubic-bezier(.2,.7,.2,1) both; }
+.inspire-rule { transform-origin: left; animation: inspire-rule .8s .1s cubic-bezier(.2,.7,.2,1) both; }
+.inspire-fill { transform-origin: left; animation: inspire-fill var(--dur) linear both; }
+.inspire-helix { animation: inspire-drift 26s linear infinite; }
+.inspire-paused .inspire-fill, .inspire-paused .inspire-helix { animation-play-state: paused; }
+.inspire-q { font-family: 'Fraunces', Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: -0.012em; font-optical-sizing: auto; }
+@media (prefers-reduced-motion: reduce) { .inspire-in, .inspire-in-2, .inspire-rule, .inspire-helix { animation: none !important; } }
+`;
 
 export default function Inspire({ className = '' }: { className?: string }) {
-  const ALL = useRef<Item[]>([...DNA, ...TIPS]).current;
-  const [i, setI] = useState(() => pick(ALL));
+  const [deck, setDeck] = useState<Item[]>(() => weave());
+  const [i, setI] = useState(0);
+  const [tab, setTab] = useState('all');
+  const [paused, setPaused] = useState(false);
   const [open, setOpen] = useState(false);
-  const paused = useRef(false);
+  const touch = useRef<number | null>(null);
 
-  useEffect(() => {
-    const t = setInterval(() => { if (!paused.current && !document.hidden) setI(x => (x + 1 + pick(ALL)) % ALL.length); }, 30000);
-    return () => clearInterval(t);
-  }, [ALL]);
-
-  const it = ALL[i];
-  const go = (d: number) => setI(x => (x + d + ALL.length) % ALL.length);
+  const it = deck[i % deck.length];
   const c = COLOR[it.kind];
+  const dur = Math.min(26, Math.max(10, Math.round((it.text.length + (it.sub?.length || 0)) / 14) + 8));
+
+  const next = (d = 1) => setI(x => (x + d + deck.length) % deck.length);
+  const choose = (id: string) => {
+    setTab(id);
+    const t = TABS.find(x => x.id === id)!;
+    const d = t.kinds.length ? shuffle(DNA.concat(TIPS).filter(x => t.kinds.includes(x.kind))) : weave();
+    setDeck(d); setI(0);
+  };
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-lg ${className}`} onMouseEnter={() => { paused.current = true; }} onMouseLeave={() => { paused.current = false; }}>
-      <div className="flex items-stretch">
-        <div className="w-1 rounded-l-lg shrink-0" style={{ background: c }} />
-        <div className="flex-1 min-w-0 px-4 py-3">
-          <div className="text-xs font-bold" style={{ color: c }}>{it.kind === 'Sales tip' ? 'Sales tip' : `Little Nap ${it.kind.toLowerCase()}`}</div>
-          <p className="text-sm sm:text-[15px] font-semibold text-slate-900 mt-1 leading-snug">{it.kind === 'Sales tip' ? it.text : `“${it.text}”`}</p>
-          {it.sub && <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-snug">{it.sub}</p>}
-        </div>
-        <div className="flex items-center gap-0.5 pr-2 shrink-0">
-          <button type="button" aria-label="Previous" className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900" onClick={() => go(-1)}><ChevronLeft size={18} /></button>
-          <button type="button" aria-label="Next" className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900" onClick={() => go(1)}><ChevronRight size={18} /></button>
-        </div>
+    <section aria-label="Little Nap DNA and sales tips" className={`relative overflow-hidden bg-white border border-slate-200 rounded-xl ${paused ? 'inspire-paused' : ''} ${className}`}
+      onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
+      onTouchStart={e => { touch.current = e.touches[0].clientX; }}
+      onTouchEnd={e => { if (touch.current === null) return; const dx = e.changedTouches[0].clientX - touch.current; touch.current = null; if (Math.abs(dx) > 50) next(dx < 0 ? 1 : -1); }}>
+      <style>{CSS}</style>
+
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-slate-100">
+        <div key={`${tab}-${i}`} className="inspire-fill h-full" style={{ background: c, ['--dur' as any]: `${dur}s` }} onAnimationEnd={() => next(1)} />
       </div>
-      <div className="border-t border-slate-100 px-4 h-9 flex items-center justify-between text-xs">
-        <button type="button" className="font-bold text-slate-600 hover:text-slate-900" onClick={() => setOpen(o => !o)}>{open ? 'Hide Little Nap DNA' : 'See Little Nap DNA'}</button>
-        <span className="text-slate-400">{i + 1} of {ALL.length}</span>
+
+      <div className="flex items-center gap-1 px-4 sm:px-6 pt-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        {TABS.map(t => (
+          <button key={t.id} type="button" onClick={() => choose(t.id)}
+            className="relative shrink-0 h-8 px-2.5 text-[13px] font-bold whitespace-nowrap transition-colors"
+            style={{ color: tab === t.id ? t.color : '#64748B' }}>
+            {t.label}
+            <span className="absolute left-2.5 right-2.5 bottom-0 h-[2px] transition-opacity" style={{ background: t.color, opacity: tab === t.id ? 1 : 0 }} />
+          </button>
+        ))}
       </div>
+
+      <div className="px-5 sm:px-8 pt-5 pb-4 min-h-[190px] sm:min-h-[168px] flex items-center gap-3">
+        <button type="button" aria-label="Previous" className="hidden sm:flex w-10 h-10 shrink-0 items-center justify-center text-slate-400 hover:text-slate-900 transition-colors" onClick={() => next(-1)}><ChevronLeft size={22} /></button>
+        <div key={`${tab}-${i}-${it.text.slice(0, 8)}`} className="flex-1 min-w-0">
+          <div className="inspire-in flex items-center gap-3">
+            <span className="text-[13px] font-bold" style={{ color: c }}>{it.kind === 'Sales tip' ? 'Sales tip' : it.kind === 'Core value' ? 'Our core value' : `Our ${it.kind.toLowerCase()}`}</span>
+            <span className="inspire-rule h-px w-16 sm:w-28" style={{ background: c }} />
+          </div>
+          <p className="inspire-in inspire-q mt-2.5 text-[21px] sm:text-[28px] leading-[1.25] sm:leading-[1.22] text-slate-900" style={{ animationDelay: '.06s' }}>
+            {it.kind === 'Sales tip' ? it.text : `“${it.text}”`}
+          </p>
+          {it.sub && <p className="inspire-in-2 mt-2.5 text-[13px] sm:text-[15px] leading-snug text-slate-600 max-w-3xl">{it.sub}</p>}
+        </div>
+        <button type="button" aria-label="Next" className="hidden sm:flex w-10 h-10 shrink-0 items-center justify-center text-slate-400 hover:text-slate-900 transition-colors" onClick={() => next(1)}><ChevronRight size={22} /></button>
+      </div>
+
+      <div className="inspire-helix h-10 opacity-90" style={{ backgroundImage: helixUri, backgroundRepeat: 'repeat-x', backgroundSize: '360px 40px' }} aria-hidden />
+
+      <div className="border-t border-slate-100 px-4 sm:px-6 h-10 flex items-center justify-between text-xs">
+        <button type="button" className="font-bold text-slate-600 hover:text-slate-900" onClick={() => setOpen(o => !o)}>{open ? 'Hide the full Little Nap DNA' : 'Read the full Little Nap DNA'}</button>
+        <span className="flex items-center gap-2 text-slate-400">
+          <button type="button" aria-label="Previous" className="sm:hidden" onClick={() => next(-1)}><ChevronLeft size={18} /></button>
+          {(i % deck.length) + 1} / {deck.length}
+          <button type="button" aria-label="Next" className="sm:hidden" onClick={() => next(1)}><ChevronRight size={18} /></button>
+        </span>
+      </div>
+
       {open && (
-        <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+        <div className="border-t border-slate-100 px-5 sm:px-8 py-5 grid sm:grid-cols-2 gap-x-10 gap-y-5">
           {DNA.map((d, k) => (
-            <div key={k}>
-              <div className="text-xs font-bold" style={{ color: COLOR[d.kind] }}>{d.kind === 'Core value' ? 'Core value' : `Our ${d.kind.toLowerCase()}`}</div>
-              <div className="text-sm text-slate-900 font-medium">{d.kind === 'Core value' ? d.text : `“${d.text}”`}</div>
-              {d.sub && <div className="text-xs text-slate-600">{d.sub}</div>}
+            <div key={k} className="min-w-0">
+              <div className="text-[13px] font-bold" style={{ color: COLOR[d.kind] }}>{d.kind === 'Core value' ? 'Core value' : `Our ${d.kind.toLowerCase()}`}</div>
+              <div className="inspire-q text-[17px] leading-snug text-slate-900 mt-0.5">{d.kind === 'Core value' ? d.text : `“${d.text}”`}</div>
+              {d.sub && <div className="text-[13px] text-slate-600 mt-1 leading-snug">{d.sub}</div>}
             </div>
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
