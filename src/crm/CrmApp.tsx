@@ -1,3 +1,4 @@
+import Inspire from '../components/Inspire';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, ListChecks, Users, Plus, SlidersHorizontal, X, Search, ChevronDown, Check } from 'lucide-react';
 import { fetchCrm, crmAction, CrmData, CrmQuote } from './api';
@@ -307,6 +308,7 @@ export function CrmApp({ onQuote, onSale }: { onQuote?: (lead: Lead, reuse?: { n
         )}
       </div>
 
+      {inToday && <div className="px-3 pt-3"><Inspire /></div>}
       <div className="flex items-center justify-between gap-3 px-4 h-9 text-xs text-slate-500 border-b border-slate-100">
         <span>{rows.length === 0 ? 'No leads' : `${Math.min(shown, rows.length)} of ${rows.length} · ${sortWord}`}</span>
         {stamp && <span>Updated {stamp.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>}

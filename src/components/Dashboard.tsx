@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { OPFData, SalesTarget } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear, subYears, isValid, eachDayOfInterval, parseISO } from 'date-fns';
+import Inspire from './Inspire';
 import { Filter, Calendar, TrendingUp, Layers, AlertTriangle, ShieldCheck, Target, CheckCircle2 } from 'lucide-react';
 
 const parseSafeDate = (dateStr: string) => {
@@ -483,6 +484,7 @@ export const Dashboard = ({
 
   return (
     <div className="space-y-6 pb-12">
+      <Inspire />
       {/* Filters Header */}
       <div className="luxury-card p-4 md:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6 justify-between items-stretch lg:items-center">
         <div className="flex flex-wrap gap-1.5 md:gap-2 items-center">
